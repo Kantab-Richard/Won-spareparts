@@ -118,12 +118,11 @@ export default function Home() {
     const nextSession = users.find(
       (user) =>
         user.username.toLowerCase() === credentials.username.trim().toLowerCase() &&
-        user.password === credentials.password &&
-        user.role === credentials.role
+        user.password === credentials.password
     );
 
     if (!nextSession) {
-      throw new Error("Login failed. Check the username, password, and role.");
+      throw new Error("Login failed. Check the username and password.");
     }
 
     const safeSession = { role: nextSession.role, name: nextSession.name, username: nextSession.username };
@@ -251,7 +250,7 @@ export default function Home() {
 }
 
 function LoginScreen({ onLogin }) {
-  const [form, setForm] = useForm({ username: "", password: "", role: "sales" });
+  const [form, setForm] = useForm({ username: "", password: "" });
   const [error, setError] = useState("");
 
   function submitLogin(event) {
@@ -275,13 +274,6 @@ function LoginScreen({ onLogin }) {
           <h1>WONSPAREPARTS Manager</h1>
         </div>
         <form className="login-form" onSubmit={submitLogin}>
-          <label className="field">
-            <span>Role</span>
-            <select value={form.role} onChange={(event) => setForm({ role: event.target.value })}>
-              <option value="sales">Sales Representative</option>
-              <option value="manager">Manager</option>
-            </select>
-          </label>
           <Field label="Username" value={form.username} onChange={(username) => setForm({ username })} />
           <Field label="Password" type="password" value={form.password} onChange={(password) => setForm({ password })} />
           {error && <p className="form-error">{error}</p>}

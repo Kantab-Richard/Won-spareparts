@@ -83,6 +83,51 @@ button {
   padding: 10px 12px;
 }
 
+.install-prompt {
+  align-items: center;
+  background: #101820;
+  border: 1px solid #2e3b47;
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.22);
+  color: #fff;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto auto;
+  left: 50%;
+  max-width: 560px;
+  padding: 12px;
+  position: fixed;
+  top: 14px;
+  transform: translateX(-50%);
+  width: calc(100% - 28px);
+  z-index: 60;
+}
+
+.install-prompt strong,
+.install-prompt span {
+  display: block;
+}
+
+.install-prompt strong {
+  font-size: 14px;
+}
+
+.install-prompt span {
+  color: #cfd8e3;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.install-dismiss {
+  background: transparent;
+  border: 0;
+  color: #cfd8e3;
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 0 6px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 292px 1fr;
@@ -798,6 +843,17 @@ th {
 
   .login-panel {
     padding: 16px;
+  }
+
+  .install-prompt {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    top: 10px;
+  }
+
+  .install-prompt .primary-button,
+  .install-dismiss {
+    width: 100%;
   }
 
   .app-shell {
