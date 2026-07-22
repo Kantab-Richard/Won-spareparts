@@ -1,0 +1,21 @@
+{
+  "name": "wonspareparts-sales-management",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev",
+    "build": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build",
+    "start": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next start",
+    "lint": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next lint"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "^14.2.16",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.16"
+  }
+}

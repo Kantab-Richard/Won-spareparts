@@ -1,0 +1,801 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Boxes,
+  CircleDollarSign,
+  ClipboardList,
+  LogOut,
+  LayoutDashboard,
+  Menu,
+  PackagePlus,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  Tags,
+  TriangleAlert,
+  UserRound,
+  X,
+} from "lucide-react";
+import { addCategory, addExpense, addItem, addSale, addStock, fetchDatabase } from "../lib/api";
+
+const today = new Date().toISOString().slice(0, 10);
+const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
+
+const tabs = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "sales", label: "Sales", icon: CircleDollarSign },
+  { id: "stock", label: "Stock In", icon: PackagePlus },
+  { id: "items", label: "Items", icon: Boxes },
+  { id: "expenses", label: "Expenses", icon: ReceiptText },
+  { id: "categories", label: "Categories", icon: Tags },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
+const emptyData = { categories: [], items: [], sales: [], stockIn: [], expenses: [] };
+const defaultUsers = [
+  { username: "manager", password: "manager123", role: "manager", name: "Manager" },
+  { username: "sales", password: "sales123", role: "sales", name: "Sales Representative" },
+];
+const roleTabs = {
+  manager: tabs,
+  sales: tabs.filter((tab) => ["dashboard", "sales", "items"].includes(tab.id)),
+};
+
+export default function Home() {
+  const [session, setSession] = useState(null);
+  const [users, setUsers] = useState(defaultUsers);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [data, setData] = useState(emptyData);
+  const [status, setStatus] = useState("Loading your shop records...");
+  const [query, setQuery] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("wonspareparts-session");
+    if (stored) {
+      setSession(JSON.parse(stored));
+    }
+    const storedUsers = window.localStorage.getItem("wonspareparts-users");
+    if (storedUsers) {
+      setUsers(JSON.parse(storedUsers));
+    }
+  }, []);
+
+  const visibleTabs = roleTabs[session?.role] || [];
+
+  async function loadData() {
+    setStatus("Refreshing records...");
+    try {
+      const nextData = await fetchDatabase();
+      setData({
+        categories: nextData.categories || [],
+        items: nextData.items || [],
+        sales: nextData.sales || [],
+        stockIn: nextData.stockIn || [],
+        expenses: nextData.expenses || [],
+      });
+      setStatus(nextData === data ? "Loaded" : "Records loaded");
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  useEffect(() => {
+    if (session) {
+      loadData();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session && !visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, session, visibleTabs]);
+
+  const view = useMemo(() => buildViewModel(data), [data]);
+  const filteredItems = data.items.filter((item) =>
+    `${item.Item_Name} ${item.Item_ID}`.toLowerCase().includes(query.toLowerCase())
+  );
+
+  async function submit(action, payload, reset) {
+    setStatus("Saving...");
+    try {
+      await action(payload);
+      reset?.();
+      await loadData();
+      setStatus("Saved successfully");
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  function login(credentials) {
+    const nextSession = users.find(
+      (user) =>
+        user.username.toLowerCase() === credentials.username.trim().toLowerCase() &&
+        user.password === credentials.password &&
+        user.role === credentials.role
+    );
+
+    if (!nextSession) {
+      throw new Error("Login failed. Check the username, password, and role.");
+    }
+
+    const safeSession = { role: nextSession.role, name: nextSession.name, username: nextSession.username };
+    window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
+    setSession(safeSession);
+    setActiveTab("dashboard");
+    setSidebarOpen(false);
+  }
+
+  function updateCredentials(nextUsers) {
+    window.localStorage.setItem("wonspareparts-users", JSON.stringify(nextUsers));
+    setUsers(nextUsers);
+    setStatus("Login credentials updated");
+  }
+
+  function logout() {
+    window.localStorage.removeItem("wonspareparts-session");
+    setSession(null);
+    setData(emptyData);
+    setStatus("Logged out");
+    setActiveTab("dashboard");
+    setSidebarOpen(false);
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={login} />;
+  }
+
+  return (
+    <main className="app-shell">
+      {sidebarOpen && <button className="sidebar-backdrop" type="button" onClick={() => setSidebarOpen(false)} />}
+      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
+        <div className="sidebar-header">
+          <div className="brand-mark">
+            <Image src="/wonspareparts-banner.png" alt="WONSPAREPARTS" width={2172} height={724} priority />
+          </div>
+          <button
+            className="mobile-menu-button"
+            type="button"
+            onClick={() => setSidebarOpen((open) => !open)}
+            title={sidebarOpen ? "Close navigation" : "Open navigation"}
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+        <div className="user-card">
+          <div className="user-avatar">
+            {session.role === "manager" ? <ShieldCheck size={20} /> : <UserRound size={20} />}
+          </div>
+          <div>
+            <strong>{session.name}</strong>
+            <span>{session.role === "manager" ? "Manager Interface" : "Sales Representative Interface"}</span>
+          </div>
+        </div>
+        <nav className="tabs" aria-label="Main navigation">
+          {visibleTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={activeTab === tab.id ? "tab active" : "tab"}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSidebarOpen(false);
+                }}
+                title={tab.label}
+              >
+                <Icon size={18} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="sync-box">
+          <span>{status}</span>
+          <button className="icon-button" onClick={loadData} title="Refresh records">
+            <RefreshCw size={17} />
+          </button>
+          <button className="icon-button" onClick={logout} title="Log out">
+            <LogOut size={17} />
+          </button>
+        </div>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Sales & Inventory</p>
+            <h1>WONSPAREPARTS Manager</h1>
+          </div>
+          <div className="search">
+            <Search size={18} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search items" />
+          </div>
+        </header>
+
+        {activeTab === "dashboard" && (
+          <Dashboard view={view} items={filteredItems} data={data} role={session.role} onNavigate={setActiveTab} />
+        )}
+        {activeTab === "sales" && <SalesForm items={data.items} onSubmit={(payload, reset) => submit(addSale, payload, reset)} />}
+        {activeTab === "stock" && <StockForm items={data.items} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "items" && (
+          <ItemsPanel
+            items={filteredItems}
+            categories={data.categories}
+            onSubmit={(payload, reset) => submit(addItem, payload, reset)}
+          />
+        )}
+        {activeTab === "expenses" && (
+          <ExpensesPanel expenses={data.expenses} onSubmit={(payload, reset) => submit(addExpense, payload, reset)} />
+        )}
+        {activeTab === "categories" && (
+          <CategoriesPanel
+            categories={data.categories}
+            onSubmit={(payload, reset) => submit(addCategory, payload, reset)}
+          />
+        )}
+        {activeTab === "settings" && session.role === "manager" && (
+          <SettingsPanel users={users} onSave={updateCredentials} />
+        )}
+      </section>
+    </main>
+  );
+}
+
+function LoginScreen({ onLogin }) {
+  const [form, setForm] = useForm({ username: "", password: "", role: "sales" });
+  const [error, setError] = useState("");
+
+  function submitLogin(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      onLogin(form);
+    } catch (loginError) {
+      setError(loginError.message);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <div className="brand-mark login-brand">
+          <Image src="/wonspareparts-banner.png" alt="WONSPAREPARTS" width={2172} height={724} priority />
+        </div>
+        <div>
+          <p className="eyebrow">Secure Access</p>
+          <h1>WONSPAREPARTS Manager</h1>
+        </div>
+        <form className="login-form" onSubmit={submitLogin}>
+          <label className="field">
+            <span>Role</span>
+            <select value={form.role} onChange={(event) => setForm({ role: event.target.value })}>
+              <option value="sales">Sales Representative</option>
+              <option value="manager">Manager</option>
+            </select>
+          </label>
+          <Field label="Username" value={form.username} onChange={(username) => setForm({ username })} />
+          <Field label="Password" type="password" value={form.password} onChange={(password) => setForm({ password })} />
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary-button" type="submit">
+            <UserRound size={18} />
+            <span>Log In</span>
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function Dashboard({ view, items, data, role, onNavigate }) {
+  const isManager = role === "manager";
+  const lowStockItems = items.filter((item) => Number(item.Current_Stock || 0) <= 10);
+  const hasInventory = items.length > 0;
+  const hasSales = data.sales.length > 0;
+
+  return (
+    <div className="content-grid">
+      <Metric title={isManager ? "Today Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : items.length} />
+      <Metric title={isManager ? "Gross Profit" : "Low Stock Items"} value={isManager ? money.format(view.grossProfit) : lowStockItems.length} />
+      <Metric title={isManager ? "Net Profit" : "Sales Today"} value={isManager ? money.format(view.netProfit) : data.sales.filter((sale) => sale.Date === today).length} />
+      <Metric title={isManager ? "Stock Value" : "Recent Sales"} value={isManager ? money.format(view.stockValue) : data.sales.length} />
+
+      <section className="panel wide">
+        <div className="panel-heading">
+          <h2>Inventory</h2>
+          <span>{items.length} items</span>
+        </div>
+        {hasInventory ? (
+          <Table
+            columns={["Item", "Category", "Cost", "Selling", "Stock"]}
+            rows={items.map((item) => [
+              item.Item_Name,
+              view.categoryNames[item.Category_ID] || item.Category_ID,
+              money.format(Number(item.Cost_Price || 0)),
+              money.format(Number(item.Selling_Price || 0)),
+              <StockBadge key={item.Item_ID} value={Number(item.Current_Stock || 0)} />,
+            ])}
+          />
+        ) : (
+          <EmptyState
+            title="No inventory yet"
+            message="Add your spare parts first so sales and stock levels can be tracked."
+            actionLabel="Add Item"
+            onAction={() => onNavigate("items")}
+          />
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Recent Sales</h2>
+          <ClipboardList size={18} />
+        </div>
+        {hasSales ? (
+          <Table
+            columns={["Date", "Item", "Qty", "Total"]}
+            rows={data.sales
+              .slice(-6)
+              .reverse()
+              .map((sale) => [
+                sale.Date,
+                view.itemNames[sale.Item_ID] || sale.Item_ID,
+                sale.Qty_Sold,
+                money.format(Number(sale.Total_Revenue || 0)),
+              ])}
+          />
+        ) : (
+          <EmptyState
+            title="No sales recorded"
+            message="Record a sale when a customer buys an item."
+            actionLabel="Record Sale"
+            onAction={() => onNavigate("sales")}
+          />
+        )}
+      </section>
+
+      <section className="panel low-stock-panel">
+        <div className="panel-heading">
+          <h2>Low Stock</h2>
+          <TriangleAlert size={18} />
+        </div>
+        {lowStockItems.length ? (
+          <div className="low-stock-list">
+            {lowStockItems.slice(0, 6).map((item) => (
+              <div className="low-stock-row" key={item.Item_ID}>
+                <div>
+                  <strong>{item.Item_Name}</strong>
+                  <span>{view.categoryNames[item.Category_ID] || item.Category_ID}</span>
+                </div>
+                <StockBadge value={Number(item.Current_Stock || 0)} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Stock levels look good" message="Items with 10 or fewer pieces will appear here." />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SalesForm({ items, onSubmit }) {
+  const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Sold: 1 });
+  const selected = items.find((item) => item.Item_ID === form.Item_ID);
+
+  return (
+    <FormPanel
+      title="Record Sale"
+      button="Save Sale"
+      onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Sold: 1 }))}
+    >
+      <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
+      <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
+      <Field label="Quantity Sold" type="number" value={form.Qty_Sold} onChange={(Qty_Sold) => setForm({ Qty_Sold })} />
+      <div className="calculation">
+        <span>Expected total</span>
+        <strong>{money.format(Number(form.Qty_Sold || 0) * Number(selected?.Selling_Price || 0))}</strong>
+      </div>
+    </FormPanel>
+  );
+}
+
+function StockForm({ items, onSubmit }) {
+  const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0 });
+
+  return (
+    <FormPanel
+      title="Add Stock"
+      button="Save Stock"
+      onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0 }))}
+    >
+      <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
+      <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
+      <Field label="Quantity Added" type="number" value={form.Qty_Added} onChange={(Qty_Added) => setForm({ Qty_Added })} />
+      <Field label="Unit Cost" type="number" value={form.Unit_Cost} onChange={(Unit_Cost) => setForm({ Unit_Cost })} />
+      <div className="calculation">
+        <span>Total cost</span>
+        <strong>{money.format(Number(form.Qty_Added || 0) * Number(form.Unit_Cost || 0))}</strong>
+      </div>
+    </FormPanel>
+  );
+}
+
+function ItemsPanel({ items, categories, onSubmit }) {
+  const [mode, setMode] = useState("list");
+  const [form, setForm] = useForm({
+    Item_Name: "",
+    Category_ID: "",
+    Cost_Price: 0,
+    Selling_Price: 0,
+    Current_Stock: 0,
+  });
+
+  if (mode === "create") {
+    return (
+      <form
+        className="panel item-form-panel"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(form, () => {
+            setForm({ Item_Name: "", Category_ID: "", Cost_Price: 0, Selling_Price: 0, Current_Stock: 0 });
+            setMode("list");
+          });
+        }}
+      >
+        <div className="panel-heading item-form-heading">
+          <div>
+            <h2>Create Item</h2>
+            <span>Add spare parts with price and opening stock.</span>
+          </div>
+          <button className="secondary-button" type="button" onClick={() => setMode("list")}>
+            <span>Item List</span>
+          </button>
+        </div>
+        <div className="item-form-grid">
+          <Field label="Item Name" value={form.Item_Name} onChange={(Item_Name) => setForm({ Item_Name })} />
+          <Select label="Category" value={form.Category_ID} onChange={(Category_ID) => setForm({ Category_ID })} options={categories} category />
+          <Field label="Cost Price" type="number" value={form.Cost_Price} onChange={(Cost_Price) => setForm({ Cost_Price })} />
+          <Field label="Selling Price" type="number" value={form.Selling_Price} onChange={(Selling_Price) => setForm({ Selling_Price })} />
+          <Field label="Opening Stock" type="number" value={form.Current_Stock} onChange={(Current_Stock) => setForm({ Current_Stock })} />
+        </div>
+        <div className="item-form-summary">
+          <div>
+            <span>Expected profit per item</span>
+            <strong>{money.format(Number(form.Selling_Price || 0) - Number(form.Cost_Price || 0))}</strong>
+          </div>
+          <button className="primary-button" type="submit">
+            <Plus size={18} />
+            <span>Add Item</span>
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-heading item-list-heading">
+        <div>
+          <h2>Item List</h2>
+          <span>{items.length} items</span>
+        </div>
+        <button className="primary-button compact-button" type="button" onClick={() => setMode("create")}>
+          <Plus size={18} />
+          <span>Create Item</span>
+        </button>
+      </div>
+      {items.length ? (
+        <div className="item-card-list">
+          {items.map((item) => (
+            <article className="item-card" key={item.Item_ID}>
+              <div>
+                <strong>{item.Item_Name}</strong>
+                <span>{item.Item_ID}</span>
+              </div>
+              <div>
+                <span>Stock</span>
+                <StockBadge value={Number(item.Current_Stock || 0)} />
+              </div>
+              <div>
+                <span>Price</span>
+                <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="No items created"
+          message="Your items will appear here after you add the first spare part."
+          actionLabel="Create Item"
+          onAction={() => setMode("create")}
+        />
+      )}
+    </section>
+  );
+}
+
+function ExpensesPanel({ expenses, onSubmit }) {
+  const [form, setForm] = useForm({ Date: today, Description: "", Amount: 0 });
+  return (
+    <div className="split">
+      <FormPanel
+        title="Record Expense"
+        button="Save Expense"
+        onSubmit={() => onSubmit(form, () => setForm({ Date: today, Description: "", Amount: 0 }))}
+      >
+        <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
+        <Field label="Description" value={form.Description} onChange={(Description) => setForm({ Description })} />
+        <Field label="Amount" type="number" value={form.Amount} onChange={(Amount) => setForm({ Amount })} />
+      </FormPanel>
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Expense Log</h2>
+          <span>{money.format(expenses.reduce((sum, item) => sum + Number(item.Amount || 0), 0))}</span>
+        </div>
+        <Table columns={["Date", "Description", "Amount"]} rows={expenses.slice(-8).reverse().map((expense) => [expense.Date, expense.Description, money.format(Number(expense.Amount || 0))])} />
+      </section>
+    </div>
+  );
+}
+
+function CategoriesPanel({ categories, onSubmit }) {
+  const [form, setForm] = useForm({ Category_Name: "", Status: "Active" });
+  return (
+    <div className="split">
+      <FormPanel
+        title="Create Category"
+        button="Add Category"
+        onSubmit={() => onSubmit(form, () => setForm({ Category_Name: "", Status: "Active" }))}
+      >
+        <Field label="Category Name" value={form.Category_Name} onChange={(Category_Name) => setForm({ Category_Name })} />
+        <label className="field">
+          <span>Status</span>
+          <select value={form.Status} onChange={(event) => setForm({ Status: event.target.value })}>
+            <option>Active</option>
+            <option>Disabled</option>
+          </select>
+        </label>
+      </FormPanel>
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Categories</h2>
+          <span>{categories.length}</span>
+        </div>
+        <Table columns={["ID", "Name", "Status"]} rows={categories.map((category) => [category.Category_ID, category.Category_Name, category.Status])} />
+      </section>
+    </div>
+  );
+}
+
+function SettingsPanel({ users, onSave }) {
+  const [form, setForm] = useState(() => ({
+    managerName: users.find((user) => user.role === "manager")?.name || "Manager",
+    managerUsername: users.find((user) => user.role === "manager")?.username || "",
+    managerPassword: users.find((user) => user.role === "manager")?.password || "",
+    salesName: users.find((user) => user.role === "sales")?.name || "Sales Representative",
+    salesUsername: users.find((user) => user.role === "sales")?.username || "",
+    salesPassword: users.find((user) => user.role === "sales")?.password || "",
+  }));
+  const [message, setMessage] = useState("");
+
+  function update(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function saveSettings(event) {
+    event.preventDefault();
+    const required = [
+      form.managerName,
+      form.managerUsername,
+      form.managerPassword,
+      form.salesName,
+      form.salesUsername,
+      form.salesPassword,
+    ];
+
+    if (required.some((value) => !String(value).trim())) {
+      setMessage("All login fields are required.");
+      return;
+    }
+
+    if (form.managerUsername.trim().toLowerCase() === form.salesUsername.trim().toLowerCase()) {
+      setMessage("Manager and sales usernames must be different.");
+      return;
+    }
+
+    onSave([
+      {
+        role: "manager",
+        name: form.managerName.trim(),
+        username: form.managerUsername.trim(),
+        password: form.managerPassword,
+      },
+      {
+        role: "sales",
+        name: form.salesName.trim(),
+        username: form.salesUsername.trim(),
+        password: form.salesPassword,
+      },
+    ]);
+    setMessage("Credentials saved successfully.");
+  }
+
+  return (
+    <form className="settings-grid" onSubmit={saveSettings}>
+      <section className="panel settings-card">
+        <div className="panel-heading">
+          <div>
+            <h2>Manager Login</h2>
+            <span>Full access to dashboard, stock, expenses, categories, and settings.</span>
+          </div>
+          <ShieldCheck size={20} />
+        </div>
+        <Field label="Display Name" value={form.managerName} onChange={(managerName) => update("managerName", managerName)} />
+        <Field label="Username" value={form.managerUsername} onChange={(managerUsername) => update("managerUsername", managerUsername)} />
+        <Field label="Password" type="password" value={form.managerPassword} onChange={(managerPassword) => update("managerPassword", managerPassword)} />
+      </section>
+
+      <section className="panel settings-card">
+        <div className="panel-heading">
+          <div>
+            <h2>Sales Login</h2>
+            <span>Limited access for recording sales and viewing items.</span>
+          </div>
+          <UserRound size={20} />
+        </div>
+        <Field label="Display Name" value={form.salesName} onChange={(salesName) => update("salesName", salesName)} />
+        <Field label="Username" value={form.salesUsername} onChange={(salesUsername) => update("salesUsername", salesUsername)} />
+        <Field label="Password" type="password" value={form.salesPassword} onChange={(salesPassword) => update("salesPassword", salesPassword)} />
+      </section>
+
+      <section className="panel settings-actions">
+        <div>
+          <h2>Save Login Credentials</h2>
+          <p>Updated credentials are saved on this browser. For hosted multi-user security, connect server-side authentication later.</p>
+          {message && <span>{message}</span>}
+        </div>
+        <button className="primary-button" type="submit">
+          <Settings size={18} />
+          <span>Save Settings</span>
+        </button>
+      </section>
+    </form>
+  );
+}
+
+function Metric({ title, value }) {
+  return (
+    <section className="metric">
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </section>
+  );
+}
+
+function EmptyState({ title, message, actionLabel, onAction }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      <span>{message}</span>
+      {actionLabel && (
+        <button className="secondary-button" type="button" onClick={onAction}>
+          <Plus size={16} />
+          <span>{actionLabel}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FormPanel({ title, button, children, onSubmit }) {
+  return (
+    <form
+      className="panel form-panel"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <div className="panel-heading">
+        <h2>{title}</h2>
+        <Plus size={18} />
+      </div>
+      {children}
+      <button className="primary-button" type="submit">
+        <Plus size={18} />
+        <span>{button}</span>
+      </button>
+    </form>
+  );
+}
+
+function Field({ label, value, onChange, type = "text" }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input type={type} value={value} min={type === "number" ? "0" : undefined} step={type === "number" ? "0.01" : undefined} onChange={(event) => onChange(event.target.value)} required />
+    </label>
+  );
+}
+
+function Select({ label, value, onChange, options, category = false }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} required>
+        <option value="">Select {label.toLowerCase()}</option>
+        {options.map((option) => (
+          <option key={category ? option.Category_ID : option.Item_ID} value={category ? option.Category_ID : option.Item_ID}>
+            {category ? option.Category_Name : option.Item_Name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Table({ columns, rows }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={columns.length}>No records yet</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StockBadge({ value }) {
+  const className = value <= 10 ? "stock-badge low" : "stock-badge";
+  return <span className={className}>{value}</span>;
+}
+
+function useForm(initial) {
+  const [form, setFormState] = useState(initial);
+  const setForm = (patch) => setFormState((current) => ({ ...current, ...patch }));
+  return [form, setForm];
+}
+
+function buildViewModel(data) {
+  const itemNames = Object.fromEntries(data.items.map((item) => [item.Item_ID, item.Item_Name]));
+  const categoryNames = Object.fromEntries(data.categories.map((category) => [category.Category_ID, category.Category_Name]));
+  const todaysSales = data.sales.filter((sale) => sale.Date === today);
+  const todaysExpenses = data.expenses.filter((expense) => expense.Date === today);
+  const revenue = todaysSales.reduce((sum, sale) => sum + Number(sale.Total_Revenue || 0), 0);
+  const cogs = todaysSales.reduce((sum, sale) => sum + Number(sale.Total_COGS || 0), 0);
+  const expenses = todaysExpenses.reduce((sum, expense) => sum + Number(expense.Amount || 0), 0);
+  const stockValue = data.items.reduce((sum, item) => sum + Number(item.Cost_Price || 0) * Number(item.Current_Stock || 0), 0);
+  return {
+    itemNames,
+    categoryNames,
+    revenue,
+    cogs,
+    expenses,
+    grossProfit: revenue - cogs,
+    netProfit: revenue - cogs - expenses,
+    stockValue,
+  };
+}
