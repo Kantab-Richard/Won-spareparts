@@ -83,6 +83,14 @@ Without an Apps Script URL, the app runs in demo mode with sample records.
 - The current login system stores credentials in the browser for simple shop use.
 - For stronger hosted security, add server-side authentication before giving public access to many users.
 
+## Install As An App
+
+This project includes PWA support, so users can install it on phones and desktop devices after it is hosted.
+
+- On Android Chrome: open the Vercel URL, tap the browser menu, then tap **Add to Home screen** or **Install app**.
+- On iPhone Safari: open the Vercel URL, tap **Share**, then tap **Add to Home Screen**.
+- On desktop Chrome or Edge: open the Vercel URL and use the install icon in the address bar.
+
 ## Sheet Tabs
 
 - `Categories`: `Category_ID`, `Category_Name`, `Status`
