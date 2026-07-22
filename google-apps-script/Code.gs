@@ -40,6 +40,7 @@ function doPost(event) {
 
     if (body.action === 'getDashboard') return jsonResponse({ ok: true, data: getDashboardData() });
     if (body.action === 'addCategory') return jsonResponse(addCategory(payload));
+    if (body.action === 'updateCategory') return jsonResponse(updateCategory(payload));
     if (body.action === 'addItem') return jsonResponse(addItem(payload));
     if (body.action === 'addStock') return jsonResponse(addStock(payload));
     if (body.action === 'addSale') return jsonResponse(addSale(payload));
@@ -73,6 +74,20 @@ function addCategory(payload) {
     Category_Name: payload.Category_Name,
     Status: payload.Status || 'Active',
   });
+  return { ok: true, data: getDashboardData() };
+}
+
+function updateCategory(payload) {
+  requireFields(payload, ['Category_ID', 'Category_Name', 'Status']);
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.categories.name);
+  const rows = readObjects('categories');
+  const index = rows.findIndex((row) => row.Category_ID === payload.Category_ID);
+  if (index === -1) throw new Error('Category not found');
+
+  const nameColumn = SHEETS.categories.headers.indexOf('Category_Name') + 1;
+  const statusColumn = SHEETS.categories.headers.indexOf('Status') + 1;
+  sheet.getRange(index + 2, nameColumn).setValue(payload.Category_Name);
+  sheet.getRange(index + 2, statusColumn).setValue(payload.Status);
   return { ok: true, data: getDashboardData() };
 }
 

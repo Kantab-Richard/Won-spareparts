@@ -21,7 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { addCategory, addExpense, addItem, addSale, addStock, fetchDatabase } from "../lib/api";
+import { addCategory, addExpense, addItem, addSale, addStock, fetchDatabase, updateCategory } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -239,6 +239,7 @@ export default function Home() {
           <CategoriesPanel
             categories={data.categories}
             onSubmit={(payload, reset) => submit(addCategory, payload, reset)}
+            onUpdate={(payload) => submit(updateCategory, payload)}
           />
         )}
         {activeTab === "settings" && session.role === "manager" && (
@@ -430,6 +431,7 @@ function StockForm({ items, onSubmit }) {
 
 function ItemsPanel({ items, categories, onSubmit }) {
   const [mode, setMode] = useState("list");
+  const activeCategories = categories.filter((category) => (category.Status || "Active") === "Active");
   const [form, setForm] = useForm({
     Item_Name: "",
     Category_ID: "",
@@ -461,7 +463,7 @@ function ItemsPanel({ items, categories, onSubmit }) {
         </div>
         <div className="item-form-grid">
           <Field label="Item Name" value={form.Item_Name} onChange={(Item_Name) => setForm({ Item_Name })} />
-          <Select label="Category" value={form.Category_ID} onChange={(Category_ID) => setForm({ Category_ID })} options={categories} category />
+          <Select label="Category" value={form.Category_ID} onChange={(Category_ID) => setForm({ Category_ID })} options={activeCategories} category />
           <Field label="Cost Price" type="number" value={form.Cost_Price} onChange={(Cost_Price) => setForm({ Cost_Price })} />
           <Field label="Selling Price" type="number" value={form.Selling_Price} onChange={(Selling_Price) => setForm({ Selling_Price })} />
           <Field label="Opening Stock" type="number" value={form.Current_Stock} onChange={(Current_Stock) => setForm({ Current_Stock })} />
@@ -547,10 +549,33 @@ function ExpensesPanel({ expenses, onSubmit }) {
   );
 }
 
-function CategoriesPanel({ categories, onSubmit }) {
+function CategoriesPanel({ categories, onSubmit, onUpdate }) {
   const [form, setForm] = useForm({ Category_Name: "", Status: "Active" });
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useForm({ Category_ID: "", Category_Name: "", Status: "Active" });
+
+  function beginEdit(category) {
+    setEditingId(category.Category_ID);
+    setEditForm({
+      Category_ID: category.Category_ID,
+      Category_Name: category.Category_Name,
+      Status: category.Status || "Active",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId("");
+    setEditForm({ Category_ID: "", Category_Name: "", Status: "Active" });
+  }
+
+  function saveEdit(event) {
+    event.preventDefault();
+    onUpdate(editForm);
+    cancelEdit();
+  }
+
   return (
-    <div className="split">
+    <div className="category-layout">
       <FormPanel
         title="Create Category"
         button="Add Category"
@@ -561,16 +586,65 @@ function CategoriesPanel({ categories, onSubmit }) {
           <span>Status</span>
           <select value={form.Status} onChange={(event) => setForm({ Status: event.target.value })}>
             <option>Active</option>
-            <option>Disabled</option>
+            <option>Inactive</option>
           </select>
         </label>
       </FormPanel>
       <section className="panel">
-        <div className="panel-heading">
-          <h2>Categories</h2>
-          <span>{categories.length}</span>
+        <div className="panel-heading item-list-heading">
+          <div>
+            <h2>Category List</h2>
+            <span>{categories.length} categories</span>
+          </div>
         </div>
-        <Table columns={["ID", "Name", "Status"]} rows={categories.map((category) => [category.Category_ID, category.Category_Name, category.Status])} />
+        {categories.length ? (
+          <div className="category-list">
+            {categories.map((category) => {
+              const isEditing = editingId === category.Category_ID;
+              return (
+                <article className="category-card" key={category.Category_ID}>
+                  {isEditing ? (
+                    <form className="category-edit-form" onSubmit={saveEdit}>
+                      <Field
+                        label="Category Name"
+                        value={editForm.Category_Name}
+                        onChange={(Category_Name) => setEditForm({ Category_Name })}
+                      />
+                      <label className="field">
+                        <span>Status</span>
+                        <select value={editForm.Status} onChange={(event) => setEditForm({ Status: event.target.value })}>
+                          <option>Active</option>
+                          <option>Inactive</option>
+                        </select>
+                      </label>
+                      <div className="category-actions">
+                        <button className="primary-button compact-button" type="submit">
+                          <span>Update</span>
+                        </button>
+                        <button className="secondary-button" type="button" onClick={cancelEdit}>
+                          <span>Cancel</span>
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div>
+                        <strong>{category.Category_Name}</strong>
+                        <span>{category.Category_ID}</span>
+                      </div>
+                      <StatusBadge status={category.Status || "Active"} />
+                      <button className="secondary-button" type="button" onClick={() => beginEdit(category)}>
+                        <span>Edit</span>
+                      </button>
+                    </>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState title="No categories created" message="Create categories first, then attach items to them." />
+        )}
       </section>
     </div>
   );
@@ -771,6 +845,11 @@ function Table({ columns, rows }) {
 function StockBadge({ value }) {
   const className = value <= 10 ? "stock-badge low" : "stock-badge";
   return <span className={className}>{value}</span>;
+}
+
+function StatusBadge({ status }) {
+  const normalized = status === "Inactive" ? "Inactive" : "Active";
+  return <span className={normalized === "Active" ? "status-badge active" : "status-badge inactive"}>{normalized}</span>;
 }
 
 function useForm(initial) {

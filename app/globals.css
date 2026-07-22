@@ -366,6 +366,12 @@ h2 {
   grid-template-columns: minmax(300px, 560px) 1fr;
 }
 
+.category-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 420px) 1fr;
+}
+
 .item-form-panel {
   align-content: start;
   display: grid;
@@ -449,6 +455,71 @@ h2 {
 
 .item-card > div:first-child strong {
   font-size: 15px;
+}
+
+.category-list {
+  display: grid;
+  gap: 10px;
+}
+
+.category-card {
+  align-items: center;
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto auto;
+  min-height: 68px;
+  padding: 12px;
+}
+
+.category-card > div {
+  min-width: 0;
+}
+
+.category-card strong,
+.category-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-card > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.category-edit-form {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: 1.2fr 180px auto;
+}
+
+.category-actions {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+}
+
+.status-badge {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.status-badge.active {
+  background: rgba(32, 128, 94, 0.12);
+  color: var(--green);
+}
+
+.status-badge.inactive {
+  background: rgba(101, 113, 131, 0.14);
+  color: var(--muted);
 }
 
 .settings-grid {
@@ -705,6 +776,7 @@ th {
   .content-grid,
   .split,
   .items-layout,
+  .category-layout,
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -913,6 +985,31 @@ th {
 
   .item-card > div:last-child {
     grid-column: span 2;
+  }
+
+  .category-card {
+    align-items: start;
+    grid-template-columns: 1fr auto;
+  }
+
+  .category-card .secondary-button {
+    grid-column: span 2;
+    width: 100%;
+  }
+
+  .category-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .category-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .category-actions .secondary-button,
+  .category-actions .primary-button {
+    width: 100%;
   }
 
   .settings-actions {
