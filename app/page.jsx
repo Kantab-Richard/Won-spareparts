@@ -580,7 +580,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                     <span>Cost</span>
                     <strong>{money.format(Number(item.Cost_Price || 0))}</strong>
                   </div>
-                  <div>
+                  <div className="item-price-cell">
                     <span>Price</span>
                     <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
                   </div>

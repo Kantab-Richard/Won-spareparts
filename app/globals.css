@@ -1148,10 +1148,10 @@ th {
 
   .item-card {
     align-items: center;
-    gap: 8px 10px;
-    grid-template-columns: minmax(0, 1fr) 64px 72px 34px;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 52px minmax(88px, auto) 34px;
     min-height: 0;
-    padding: 10px 12px;
+    padding: 10px;
   }
 
   .item-card > div:first-child {
@@ -1166,6 +1166,19 @@ th {
   .item-card > div:nth-child(2),
   .item-card > div:nth-child(4) {
     text-align: right;
+  }
+
+  .item-card .item-price-cell strong {
+    font-size: 15px;
+    line-height: 1.1;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .item-card .item-price-cell span {
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .item-card > div:nth-child(3) {
@@ -1270,6 +1283,21 @@ th {
 
   .sidebar.open .tabs {
     grid-template-columns: 1fr;
+  }
+
+  .item-card {
+    grid-template-columns: minmax(0, 1fr) 48px minmax(78px, auto) 32px;
+    padding: 9px;
+  }
+
+  .item-card .item-price-cell strong {
+    font-size: 14px;
+  }
+
+  .item-card .item-edit-button {
+    height: 32px;
+    min-height: 32px;
+    width: 32px;
   }
 
   .tab {
