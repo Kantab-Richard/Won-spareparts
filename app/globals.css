@@ -546,7 +546,7 @@ h2 {
 }
 
 .edit-actions {
-  align-items: end;
+  align-items: flex-end;
   display: flex;
   gap: 8px;
 }
@@ -1114,13 +1114,48 @@ th {
   }
 
   .item-card {
-    align-items: start;
-    grid-template-columns: 1fr 76px;
+    align-items: center;
+    gap: 8px 10px;
+    grid-template-columns: minmax(0, 1fr) 64px 72px 34px;
+    min-height: 0;
+    padding: 10px 12px;
   }
 
-  .item-card > div:nth-child(n + 3),
-  .item-card .secondary-button {
-    grid-column: span 2;
+  .item-card > div:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .item-card > div:first-child strong {
+    font-size: 14px;
+  }
+
+  .item-card > div:nth-child(2),
+  .item-card > div:nth-child(4) {
+    text-align: right;
+  }
+
+  .item-card > div:nth-child(3) {
+    display: none;
+  }
+
+  .item-card .status-badge {
+    display: none;
+  }
+
+  .item-card .item-edit-button {
+    align-items: center;
+    grid-column: 4;
+    grid-row: 1 / span 2;
+    height: 34px;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0;
+    width: 34px;
+  }
+
+  .item-card .item-edit-button span {
+    display: none;
   }
 
   .item-edit-form {

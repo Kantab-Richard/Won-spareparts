@@ -6,6 +6,7 @@ import {
   Boxes,
   CircleDollarSign,
   ClipboardList,
+  Pencil,
   LogOut,
   LayoutDashboard,
   Menu,
@@ -585,7 +586,8 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                   </div>
                   <StatusBadge status={item.Status || "Active"} />
                   {canManageItems && (
-                    <button className="secondary-button compact-button" type="button" onClick={() => beginEdit(item)}>
+                    <button className="secondary-button compact-button item-edit-button" type="button" onClick={() => beginEdit(item)} title="Edit item">
+                      <Pencil size={15} />
                       <span>Edit</span>
                     </button>
                   )}
