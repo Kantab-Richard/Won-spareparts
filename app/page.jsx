@@ -25,6 +25,12 @@ import { addCategory, addExpense, addItem, addSale, addStock, checkConnection, f
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
+const dateFilterOptions = [
+  { id: "today", label: "Today" },
+  { id: "week", label: "This Week" },
+  { id: "month", label: "This Month" },
+  { id: "custom", label: "Custom" },
+];
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -54,6 +60,7 @@ export default function Home() {
   const [status, setStatus] = useState("Loading your shop records...");
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState({ mode: "today", start: today, end: today });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("wonspareparts-session");
@@ -97,10 +104,12 @@ export default function Home() {
     }
   }, [activeTab, session, visibleTabs]);
 
-  const view = useMemo(() => buildViewModel(data), [data]);
+  const dateRange = useMemo(() => getDateRange(dateFilter), [dateFilter]);
+  const view = useMemo(() => buildViewModel(data, dateRange), [data, dateRange]);
   const filteredItems = data.items.filter((item) =>
-    `${item.Item_Name} ${item.Item_ID}`.toLowerCase().includes(query.toLowerCase())
+    `${item.Item_Name} ${item.Item_ID} ${item.Status || "Active"}`.toLowerCase().includes(query.toLowerCase())
   );
+  const activeItems = data.items.filter((item) => (item.Status || "Active") === "Active");
 
   async function submit(action, payload, reset) {
     setStatus("Saving...");
@@ -220,13 +229,22 @@ export default function Home() {
         </header>
 
         {activeTab === "dashboard" && (
-          <Dashboard view={view} items={filteredItems} data={data} role={session.role} onNavigate={setActiveTab} />
+          <Dashboard
+            view={view}
+            items={session.role === "manager" ? filteredItems : filteredItems.filter((item) => (item.Status || "Active") === "Active")}
+            data={data}
+            role={session.role}
+            dateFilter={dateFilter}
+            dateRange={dateRange}
+            onDateFilterChange={setDateFilter}
+            onNavigate={setActiveTab}
+          />
         )}
-        {activeTab === "sales" && <SalesForm items={data.items} onSubmit={(payload, reset) => submit(addSale, payload, reset)} />}
-        {activeTab === "stock" && <StockForm items={data.items} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "sales" && <SalesForm items={activeItems} onSubmit={(payload, reset) => submit(addSale, payload, reset)} />}
+        {activeTab === "stock" && <StockForm items={activeItems} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
         {activeTab === "items" && (
           <ItemsPanel
-            items={filteredItems}
+            items={session.role === "manager" ? filteredItems : filteredItems.filter((item) => (item.Status || "Active") === "Active")}
             categories={data.categories}
             role={session.role}
             onSubmit={(payload, reset) => submit(addItem, payload, reset)}
@@ -289,15 +307,18 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function Dashboard({ view, items, data, role, onNavigate }) {
+function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilterChange, onNavigate }) {
   const isManager = role === "manager";
   const lowStockItems = items.filter((item) => Number(item.Current_Stock || 0) <= 10);
   const hasInventory = items.length > 0;
-  const hasSales = data.sales.length > 0;
+  const hasSales = view.sales.length > 0;
 
   return (
     <div className="content-grid">
-      <Metric title={isManager ? "Today Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : items.length} />
+      {isManager && (
+        <DateFilterControl filter={dateFilter} range={dateRange} onChange={onDateFilterChange} />
+      )}
+      <Metric title={isManager ? "Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : items.length} />
       <Metric title={isManager ? "Gross Profit" : "Low Stock Items"} value={isManager ? money.format(view.grossProfit) : lowStockItems.length} />
       <Metric title={isManager ? "Net Profit" : "Sales Today"} value={isManager ? money.format(view.netProfit) : data.sales.filter((sale) => sale.Date === today).length} />
       <Metric title={isManager ? "Stock Value" : "Recent Sales"} value={isManager ? money.format(view.stockValue) : data.sales.length} />
@@ -312,10 +333,13 @@ function Dashboard({ view, items, data, role, onNavigate }) {
             columns={["Item", "Category", "Cost", "Selling", "Stock"]}
             rows={items.map((item) => [
               item.Item_Name,
-              view.categoryNames[item.Category_ID] || item.Category_ID,
-              money.format(Number(item.Cost_Price || 0)),
-              money.format(Number(item.Selling_Price || 0)),
-              <StockBadge key={item.Item_ID} value={Number(item.Current_Stock || 0)} />,
+                view.categoryNames[item.Category_ID] || item.Category_ID,
+                money.format(Number(item.Cost_Price || 0)),
+                money.format(Number(item.Selling_Price || 0)),
+                <>
+                  <StockBadge key={`${item.Item_ID}-stock`} value={Number(item.Current_Stock || 0)} />
+                  {isManager && <StatusBadge status={item.Status || "Active"} />}
+                </>,
             ])}
           />
         ) : (
@@ -336,7 +360,7 @@ function Dashboard({ view, items, data, role, onNavigate }) {
         {hasSales ? (
           <Table
             columns={["Date", "Item", "Qty", "Total"]}
-            rows={data.sales
+            rows={view.sales
               .slice(-6)
               .reverse()
               .map((sale) => [
@@ -433,6 +457,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
     Cost_Price: 0,
     Selling_Price: 0,
     Current_Stock: 0,
+    Status: "Active",
   });
   const activeCategories = categories.filter((category) => (category.Status || "Active") === "Active");
   const categoryOptions = categories.length ? categories : activeCategories;
@@ -454,6 +479,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
       Cost_Price: item.Cost_Price || 0,
       Selling_Price: item.Selling_Price || 0,
       Current_Stock: item.Current_Stock || 0,
+      Status: item.Status || "Active",
     });
   }
 
@@ -490,6 +516,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
           <Field label="Cost Price" type="number" value={form.Cost_Price} onChange={(Cost_Price) => setForm({ Cost_Price })} />
           <Field label="Selling Price" type="number" value={form.Selling_Price} onChange={(Selling_Price) => setForm({ Selling_Price })} />
           <Field label="Opening Stock" type="number" value={form.Current_Stock} onChange={(Current_Stock) => setForm({ Current_Stock })} />
+          <StatusSelect label="Status" value={form.Status} onChange={(Status) => setForm({ Status })} />
         </div>
         <div className="item-form-summary">
           <div>
@@ -528,6 +555,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                   <Field label="Cost Price" type="number" value={editForm.Cost_Price} onChange={(Cost_Price) => setEditForm({ Cost_Price })} />
                   <Field label="Selling Price" type="number" value={editForm.Selling_Price} onChange={(Selling_Price) => setEditForm({ Selling_Price })} />
                   <Field label="Stock" type="number" value={editForm.Current_Stock} onChange={(Current_Stock) => setEditForm({ Current_Stock })} />
+                  <StatusSelect label="Status" value={editForm.Status} onChange={(Status) => setEditForm({ Status })} />
                   <div className="edit-actions">
                     <button className="primary-button compact-button" type="submit">
                       <span>Save</span>
@@ -555,6 +583,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                     <span>Price</span>
                     <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
                   </div>
+                  <StatusBadge status={item.Status || "Active"} />
                   {canManageItems && (
                     <button className="secondary-button compact-button" type="button" onClick={() => beginEdit(item)}>
                       <span>Edit</span>
@@ -896,6 +925,47 @@ function Select({ label, value, onChange, options, category = false }) {
   );
 }
 
+function StatusSelect({ label, value, onChange }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} required>
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+      </select>
+    </label>
+  );
+}
+
+function DateFilterControl({ filter, range, onChange }) {
+  return (
+    <section className="panel date-filter-panel">
+      <div>
+        <h2>Report Date</h2>
+        <span>{formatDateRange(range)}</span>
+      </div>
+      <div className="date-filter-options">
+        {dateFilterOptions.map((option) => (
+          <button
+            key={option.id}
+            className={filter.mode === option.id ? "filter-chip active" : "filter-chip"}
+            type="button"
+            onClick={() => onChange({ ...filter, mode: option.id })}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {filter.mode === "custom" && (
+        <div className="custom-date-row">
+          <Field label="Start Date" type="date" value={filter.start} onChange={(start) => onChange({ ...filter, start })} />
+          <Field label="End Date" type="date" value={filter.end} onChange={(end) => onChange({ ...filter, end })} />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Table({ columns, rows }) {
   return (
     <div className="table-wrap">
@@ -937,18 +1007,20 @@ function useForm(initial) {
   return [form, setForm];
 }
 
-function buildViewModel(data) {
+function buildViewModel(data, dateRange) {
   const itemNames = Object.fromEntries(data.items.map((item) => [item.Item_ID, item.Item_Name]));
   const categoryNames = Object.fromEntries(data.categories.map((category) => [category.Category_ID, category.Category_Name]));
-  const todaysSales = data.sales.filter((sale) => sale.Date === today);
-  const todaysExpenses = data.expenses.filter((expense) => expense.Date === today);
-  const revenue = todaysSales.reduce((sum, sale) => sum + Number(sale.Total_Revenue || 0), 0);
-  const cogs = todaysSales.reduce((sum, sale) => sum + Number(sale.Total_COGS || 0), 0);
-  const expenses = todaysExpenses.reduce((sum, expense) => sum + Number(expense.Amount || 0), 0);
+  const sales = data.sales.filter((sale) => isDateInRange(sale.Date, dateRange));
+  const rangeExpenses = data.expenses.filter((expense) => isDateInRange(expense.Date, dateRange));
+  const revenue = sales.reduce((sum, sale) => sum + Number(sale.Total_Revenue || 0), 0);
+  const cogs = sales.reduce((sum, sale) => sum + Number(sale.Total_COGS || 0), 0);
+  const expenses = rangeExpenses.reduce((sum, expense) => sum + Number(expense.Amount || 0), 0);
   const stockValue = data.items.reduce((sum, item) => sum + Number(item.Cost_Price || 0) * Number(item.Current_Stock || 0), 0);
   return {
     itemNames,
     categoryNames,
+    sales,
+    expenseRows: rangeExpenses,
     revenue,
     cogs,
     expenses,
@@ -956,4 +1028,44 @@ function buildViewModel(data) {
     netProfit: revenue - cogs - expenses,
     stockValue,
   };
+}
+
+function getDateRange(filter) {
+  if (filter.mode === "custom") {
+    const start = filter.start || today;
+    const end = filter.end || start;
+    return start <= end ? { start, end } : { start: end, end: start };
+  }
+
+  const current = new Date(`${today}T00:00:00`);
+  if (filter.mode === "week") {
+    const day = current.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const start = addDays(current, mondayOffset);
+    return { start: toDateInput(start), end: today };
+  }
+
+  if (filter.mode === "month") {
+    return { start: `${today.slice(0, 7)}-01`, end: today };
+  }
+
+  return { start: today, end: today };
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function toDateInput(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function isDateInRange(date, range) {
+  return date >= range.start && date <= range.end;
+}
+
+function formatDateRange(range) {
+  return range.start === range.end ? range.start : `${range.start} to ${range.end}`;
 }

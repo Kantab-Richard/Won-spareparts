@@ -94,7 +94,7 @@ This project includes PWA support, so users can install it on phones and desktop
 ## Sheet Tabs
 
 - `Categories`: `Category_ID`, `Category_Name`, `Status`
-- `Items`: `Item_ID`, `Item_Name`, `Category_ID`, `Cost_Price`, `Selling_Price`, `Current_Stock`
+- `Items`: `Item_ID`, `Item_Name`, `Category_ID`, `Cost_Price`, `Selling_Price`, `Current_Stock`, `Status`
 - `Stock_In`: `StockIn_ID`, `Date`, `Item_ID`, `Qty_Added`, `Unit_Cost`, `Total_Cost`
 - `Sales`: `Sale_ID`, `Date`, `Item_ID`, `Qty_Sold`, `Unit_Selling_Price`, `Unit_Cost_Price`, `Total_Revenue`, `Total_COGS`
 - `Expenses`: `Expense_ID`, `Date`, `Description`, `Amount`

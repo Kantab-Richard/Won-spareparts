@@ -8,7 +8,7 @@ const SHEETS = {
   },
   items: {
     name: 'Items',
-    headers: ['Item_ID', 'Item_Name', 'Category_ID', 'Cost_Price', 'Selling_Price', 'Current_Stock'],
+    headers: ['Item_ID', 'Item_Name', 'Category_ID', 'Cost_Price', 'Selling_Price', 'Current_Stock', 'Status'],
     prefix: 'ITM',
   },
   stockIn: {
@@ -102,12 +102,13 @@ function addItem(payload) {
     Cost_Price: number(payload.Cost_Price),
     Selling_Price: number(payload.Selling_Price),
     Current_Stock: number(payload.Current_Stock),
+    Status: payload.Status || 'Active',
   });
   return { ok: true, data: getDashboardData() };
 }
 
 function updateItem(payload) {
-  requireFields(payload, ['Item_ID', 'Item_Name', 'Category_ID']);
+  requireFields(payload, ['Item_ID', 'Item_Name', 'Category_ID', 'Status']);
   const sheet = getSpreadsheet().getSheetByName(SHEETS.items.name);
   const rows = readObjects('items');
   const index = rows.findIndex((row) => row.Item_ID === payload.Item_ID);
@@ -119,6 +120,7 @@ function updateItem(payload) {
     Cost_Price: number(payload.Cost_Price),
     Selling_Price: number(payload.Selling_Price),
     Current_Stock: number(payload.Current_Stock),
+    Status: payload.Status,
   };
 
   Object.keys(updates).forEach((header) => {
@@ -131,6 +133,8 @@ function updateItem(payload) {
 
 function addStock(payload) {
   requireFields(payload, ['Date', 'Item_ID', 'Qty_Added', 'Unit_Cost']);
+  const item = findItem(payload.Item_ID);
+  if ((item.Status || 'Active') !== 'Active') throw new Error('This item is inactive');
   const qty = number(payload.Qty_Added);
   const unitCost = number(payload.Unit_Cost);
   appendObject('stockIn', {
@@ -148,6 +152,7 @@ function addStock(payload) {
 function addSale(payload) {
   requireFields(payload, ['Date', 'Item_ID', 'Qty_Sold']);
   const item = findItem(payload.Item_ID);
+  if ((item.Status || 'Active') !== 'Active') throw new Error('This item is inactive');
   const qty = number(payload.Qty_Sold);
   const currentStock = number(item.Current_Stock);
   if (qty > currentStock) throw new Error('Not enough stock for this sale');
@@ -204,7 +209,14 @@ function ensureHeaders() {
     const config = SHEETS[key];
     const sheet = spreadsheet.getSheetByName(config.name) || spreadsheet.insertSheet(config.name);
     const existing = sheet.getRange(1, 1, 1, config.headers.length).getValues()[0];
-    if (existing.join('') === '') sheet.appendRow(config.headers);
+    if (existing.join('') === '') {
+      sheet.getRange(1, 1, 1, config.headers.length).setValues([config.headers]);
+      sheet.setFrozenRows(1);
+      return;
+    }
+    config.headers.forEach((header, index) => {
+      if (existing[index] !== header) sheet.getRange(1, index + 1).setValue(header);
+    });
   });
 }
 
