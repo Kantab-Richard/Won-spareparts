@@ -21,7 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { addCategory, addExpense, addItem, addSale, addStock, checkConnection, fetchDatabase, updateCategory } from "../lib/api";
+import { addCategory, addExpense, addItem, addSale, addStock, checkConnection, fetchDatabase, updateCategory, updateItem } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -228,7 +228,9 @@ export default function Home() {
           <ItemsPanel
             items={filteredItems}
             categories={data.categories}
+            role={session.role}
             onSubmit={(payload, reset) => submit(addItem, payload, reset)}
+            onUpdate={(payload) => submit(updateItem, payload)}
           />
         )}
         {activeTab === "expenses" && (
@@ -421,9 +423,20 @@ function StockForm({ items, onSubmit }) {
   );
 }
 
-function ItemsPanel({ items, categories, onSubmit }) {
+function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
   const [mode, setMode] = useState("list");
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useForm({
+    Item_ID: "",
+    Item_Name: "",
+    Category_ID: "",
+    Cost_Price: 0,
+    Selling_Price: 0,
+    Current_Stock: 0,
+  });
   const activeCategories = categories.filter((category) => (category.Status || "Active") === "Active");
+  const categoryOptions = categories.length ? categories : activeCategories;
+  const canManageItems = role === "manager";
   const [form, setForm] = useForm({
     Item_Name: "",
     Category_ID: "",
@@ -431,6 +444,24 @@ function ItemsPanel({ items, categories, onSubmit }) {
     Selling_Price: 0,
     Current_Stock: 0,
   });
+
+  function beginEdit(item) {
+    setEditingId(item.Item_ID);
+    setEditForm({
+      Item_ID: item.Item_ID,
+      Item_Name: item.Item_Name,
+      Category_ID: item.Category_ID,
+      Cost_Price: item.Cost_Price || 0,
+      Selling_Price: item.Selling_Price || 0,
+      Current_Stock: item.Current_Stock || 0,
+    });
+  }
+
+  function saveEdit(event) {
+    event.preventDefault();
+    onUpdate(editForm);
+    setEditingId("");
+  }
 
   if (mode === "create") {
     return (
@@ -490,18 +521,47 @@ function ItemsPanel({ items, categories, onSubmit }) {
         <div className="item-card-list">
           {items.map((item) => (
             <article className="item-card" key={item.Item_ID}>
-              <div>
-                <strong>{item.Item_Name}</strong>
-                <span>{item.Item_ID}</span>
-              </div>
-              <div>
-                <span>Stock</span>
-                <StockBadge value={Number(item.Current_Stock || 0)} />
-              </div>
-              <div>
-                <span>Price</span>
-                <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
-              </div>
+              {editingId === item.Item_ID ? (
+                <form className="item-edit-form" onSubmit={saveEdit}>
+                  <Field label="Item Name" value={editForm.Item_Name} onChange={(Item_Name) => setEditForm({ Item_Name })} />
+                  <Select label="Category" value={editForm.Category_ID} onChange={(Category_ID) => setEditForm({ Category_ID })} options={categoryOptions} category />
+                  <Field label="Cost Price" type="number" value={editForm.Cost_Price} onChange={(Cost_Price) => setEditForm({ Cost_Price })} />
+                  <Field label="Selling Price" type="number" value={editForm.Selling_Price} onChange={(Selling_Price) => setEditForm({ Selling_Price })} />
+                  <Field label="Stock" type="number" value={editForm.Current_Stock} onChange={(Current_Stock) => setEditForm({ Current_Stock })} />
+                  <div className="edit-actions">
+                    <button className="primary-button compact-button" type="submit">
+                      <span>Save</span>
+                    </button>
+                    <button className="secondary-button compact-button" type="button" onClick={() => setEditingId("")}>
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div>
+                    <strong>{item.Item_Name}</strong>
+                    <span>{item.Item_ID}</span>
+                  </div>
+                  <div>
+                    <span>Stock</span>
+                    <StockBadge value={Number(item.Current_Stock || 0)} />
+                  </div>
+                  <div>
+                    <span>Cost</span>
+                    <strong>{money.format(Number(item.Cost_Price || 0))}</strong>
+                  </div>
+                  <div>
+                    <span>Price</span>
+                    <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
+                  </div>
+                  {canManageItems && (
+                    <button className="secondary-button compact-button" type="button" onClick={() => beginEdit(item)}>
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </>
+              )}
             </article>
           ))}
         </div>

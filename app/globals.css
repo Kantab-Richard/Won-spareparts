@@ -481,9 +481,26 @@ h2 {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 1.4fr auto auto;
+  grid-template-columns: 1.4fr auto auto auto auto;
   min-height: 70px;
   padding: 12px;
+}
+
+.item-edit-form {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: 1.3fr 1.1fr 0.7fr 0.7fr 0.7fr auto;
+}
+
+.item-edit-form .field {
+  min-width: 0;
+}
+
+.edit-actions {
+  align-items: end;
+  display: flex;
+  gap: 8px;
 }
 
 .item-card div {
@@ -1036,11 +1053,22 @@ th {
 
   .item-card {
     align-items: start;
-    grid-template-columns: 1fr 74px;
+    grid-template-columns: 1fr 76px;
   }
 
-  .item-card > div:last-child {
+  .item-card > div:nth-child(n + 3),
+  .item-card .secondary-button {
     grid-column: span 2;
+  }
+
+  .item-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .category-card {

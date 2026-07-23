@@ -43,6 +43,7 @@ function doPost(event) {
     if (body.action === 'addCategory') return jsonResponse(addCategory(payload));
     if (body.action === 'updateCategory') return jsonResponse(updateCategory(payload));
     if (body.action === 'addItem') return jsonResponse(addItem(payload));
+    if (body.action === 'updateItem') return jsonResponse(updateItem(payload));
     if (body.action === 'addStock') return jsonResponse(addStock(payload));
     if (body.action === 'addSale') return jsonResponse(addSale(payload));
     if (body.action === 'addExpense') return jsonResponse(addExpense(payload));
@@ -102,6 +103,29 @@ function addItem(payload) {
     Selling_Price: number(payload.Selling_Price),
     Current_Stock: number(payload.Current_Stock),
   });
+  return { ok: true, data: getDashboardData() };
+}
+
+function updateItem(payload) {
+  requireFields(payload, ['Item_ID', 'Item_Name', 'Category_ID']);
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.items.name);
+  const rows = readObjects('items');
+  const index = rows.findIndex((row) => row.Item_ID === payload.Item_ID);
+  if (index === -1) throw new Error('Item not found');
+
+  const updates = {
+    Item_Name: payload.Item_Name,
+    Category_ID: payload.Category_ID,
+    Cost_Price: number(payload.Cost_Price),
+    Selling_Price: number(payload.Selling_Price),
+    Current_Stock: number(payload.Current_Stock),
+  };
+
+  Object.keys(updates).forEach((header) => {
+    const column = SHEETS.items.headers.indexOf(header) + 1;
+    sheet.getRange(index + 2, column).setValue(updates[header]);
+  });
+
   return { ok: true, data: getDashboardData() };
 }
 
