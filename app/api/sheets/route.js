@@ -59,6 +59,16 @@ export async function POST(request) {
       );
     }
 
+    if (!result.ok && result.error === "Unknown action") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Google Apps Script does not have this latest action yet. Paste the latest Code.gs, deploy a new Apps Script version, then redeploy Vercel.",
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error.message || "Unable to reach Google Apps Script." }, { status: 500 });
