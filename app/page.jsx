@@ -320,7 +320,7 @@ function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilte
         <DateFilterControl filter={dateFilter} range={dateRange} onChange={onDateFilterChange} />
       )}
       <Metric title={isManager ? "Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : items.length} />
-      <Metric title={isManager ? "Gross Profit" : "Low Stock Items"} value={isManager ? money.format(view.grossProfit) : lowStockItems.length} />
+      <Metric title={isManager ? "Gross Profit" : "Stock Units"} value={isManager ? money.format(view.grossProfit) : items.reduce((sum, item) => sum + Number(item.Current_Stock || 0), 0)} />
       <Metric title={isManager ? "Net Profit" : "Sales Today"} value={isManager ? money.format(view.netProfit) : data.sales.filter((sale) => sale.Date === today).length} />
       <Metric title={isManager ? "Stock Value" : "Recent Sales"} value={isManager ? money.format(view.stockValue) : data.sales.length} />
 
@@ -381,27 +381,29 @@ function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilte
         )}
       </section>
 
-      <section className="panel low-stock-panel">
-        <div className="panel-heading">
-          <h2>Low Stock</h2>
-          <TriangleAlert size={18} />
-        </div>
-        {lowStockItems.length ? (
-          <div className="low-stock-list">
-            {lowStockItems.slice(0, 6).map((item) => (
-              <div className="low-stock-row" key={item.Item_ID}>
-                <div>
-                  <strong>{item.Item_Name}</strong>
-                  <span>{view.categoryNames[item.Category_ID] || item.Category_ID}</span>
-                </div>
-                <StockBadge value={Number(item.Current_Stock || 0)} />
-              </div>
-            ))}
+      {isManager && (
+        <section className="panel low-stock-panel">
+          <div className="panel-heading">
+            <h2>Low Stock</h2>
+            <TriangleAlert size={18} />
           </div>
-        ) : (
-          <EmptyState title="Stock levels look good" message="Items with 10 or fewer pieces will appear here." />
-        )}
-      </section>
+          {lowStockItems.length ? (
+            <div className="low-stock-list">
+              {lowStockItems.slice(0, 6).map((item) => (
+                <div className="low-stock-row" key={item.Item_ID}>
+                  <div>
+                    <strong>{item.Item_Name}</strong>
+                    <span>{view.categoryNames[item.Category_ID] || item.Category_ID}</span>
+                  </div>
+                  <StockBadge value={Number(item.Current_Stock || 0)} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="Stock levels look good" message="Items with 10 or fewer pieces will appear here." />
+          )}
+        </section>
+      )}
     </div>
   );
 }
