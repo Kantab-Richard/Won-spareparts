@@ -38,6 +38,7 @@ function doPost(event) {
     verifyToken(body.token);
     const payload = body.payload || {};
 
+    if (body.action === 'healthCheck') return jsonResponse({ ok: true, message: 'Google Sheets connection is working' });
     if (body.action === 'getDashboard') return jsonResponse({ ok: true, data: getDashboardData() });
     if (body.action === 'addCategory') return jsonResponse(addCategory(payload));
     if (body.action === 'updateCategory') return jsonResponse(updateCategory(payload));

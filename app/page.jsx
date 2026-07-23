@@ -21,7 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { addCategory, addExpense, addItem, addSale, addStock, fetchDatabase, updateCategory } from "../lib/api";
+import { addCategory, addExpense, addItem, addSale, addStock, checkConnection, fetchDatabase, updateCategory } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -242,7 +242,7 @@ export default function Home() {
           />
         )}
         {activeTab === "settings" && session.role === "manager" && (
-          <SettingsPanel users={users} onSave={updateCredentials} />
+          <SettingsPanel users={users} onSave={updateCredentials} onCheckConnection={checkConnection} />
         )}
       </section>
     </main>
@@ -642,7 +642,7 @@ function CategoriesPanel({ categories, onSubmit, onUpdate }) {
   );
 }
 
-function SettingsPanel({ users, onSave }) {
+function SettingsPanel({ users, onSave, onCheckConnection }) {
   const [form, setForm] = useState(() => ({
     managerName: users.find((user) => user.role === "manager")?.name || "Manager",
     managerUsername: users.find((user) => user.role === "manager")?.username || "",
@@ -652,6 +652,8 @@ function SettingsPanel({ users, onSave }) {
     salesPassword: users.find((user) => user.role === "sales")?.password || "",
   }));
   const [message, setMessage] = useState("");
+  const [connectionMessage, setConnectionMessage] = useState("");
+  const [checkingConnection, setCheckingConnection] = useState(false);
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -695,8 +697,33 @@ function SettingsPanel({ users, onSave }) {
     setMessage("Credentials saved successfully.");
   }
 
+  async function testConnection() {
+    setCheckingConnection(true);
+    setConnectionMessage("Checking connection...");
+    try {
+      const result = await onCheckConnection();
+      setConnectionMessage(result.demo ? result.message : result.message || "Google Sheets connection is working.");
+    } catch (error) {
+      setConnectionMessage(error.message);
+    } finally {
+      setCheckingConnection(false);
+    }
+  }
+
   return (
     <form className="settings-grid" onSubmit={saveSettings}>
+      <section className="panel settings-actions connection-card">
+        <div>
+          <h2>Google Sheets Connection</h2>
+          <p>Test this before creating real items, categories, stock, sales, or expenses.</p>
+          {connectionMessage && <span>{connectionMessage}</span>}
+        </div>
+        <button className="secondary-button" type="button" onClick={testConnection} disabled={checkingConnection}>
+          <RefreshCw size={18} />
+          <span>{checkingConnection ? "Checking..." : "Test Connection"}</span>
+        </button>
+      </section>
+
       <section className="panel settings-card">
         <div className="panel-heading">
           <div>

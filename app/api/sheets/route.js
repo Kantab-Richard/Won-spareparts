@@ -14,6 +14,13 @@ export async function POST(request) {
   const appScriptUrl = process.env.APPS_SCRIPT_URL || "";
 
   if (!appScriptUrl || appScriptUrl.includes("YOUR_DEPLOYMENT_ID")) {
+    if (body.action === "healthCheck") {
+      return NextResponse.json({
+        ok: true,
+        demo: true,
+        message: "The app is in demo mode. Add APPS_SCRIPT_URL and APPS_SCRIPT_TOKEN in Vercel to save real records.",
+      });
+    }
     return NextResponse.json({ ok: true, demo: true, data: sampleData });
   }
 
