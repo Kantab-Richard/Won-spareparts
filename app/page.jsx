@@ -6,6 +6,7 @@ import {
   Boxes,
   CircleDollarSign,
   ClipboardList,
+  History,
   Pencil,
   LogOut,
   LayoutDashboard,
@@ -17,12 +18,13 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Truck,
   Tags,
   TriangleAlert,
   UserRound,
   X,
 } from "lucide-react";
-import { addCategory, addExpense, addItem, addSale, addStock, checkConnection, fetchDatabase, updateCategory, updateItem } from "../lib/api";
+import { addCategory, addExpense, addItem, addSale, addStock, addSupplier, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -37,13 +39,15 @@ const tabs = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "sales", label: "Sales", icon: CircleDollarSign },
   { id: "stock", label: "Stock In", icon: PackagePlus },
+  { id: "suppliers", label: "Suppliers", icon: Truck },
+  { id: "history", label: "Stock History", icon: History },
   { id: "items", label: "Items", icon: Boxes },
   { id: "expenses", label: "Expenses", icon: ReceiptText },
   { id: "categories", label: "Categories", icon: Tags },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const emptyData = { categories: [], items: [], sales: [], stockIn: [], expenses: [] };
+const emptyData = { categories: [], items: [], sales: [], stockIn: [], suppliers: [], movements: [], expenses: [] };
 const defaultUsers = [
   { username: "manager", password: "manager123", role: "manager", name: "Manager" },
   { username: "sales", password: "sales123", role: "sales", name: "Sales Representative" },
@@ -85,6 +89,8 @@ export default function Home() {
         items: nextData.items || [],
         sales: nextData.sales || [],
         stockIn: nextData.stockIn || [],
+        suppliers: nextData.suppliers || [],
+        movements: nextData.movements || [],
         expenses: nextData.expenses || [],
       });
       setStatus(nextData === data ? "Loaded" : "Records loaded");
@@ -242,7 +248,17 @@ export default function Home() {
           />
         )}
         {activeTab === "sales" && <SalesForm items={activeItems} onSubmit={(payload, reset) => submit(addSale, payload, reset)} />}
-        {activeTab === "stock" && <StockForm items={activeItems} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "suppliers" && session.role === "manager" && (
+          <SuppliersPanel
+            suppliers={data.suppliers}
+            onSubmit={(payload, reset) => submit(addSupplier, payload, reset)}
+            onUpdate={(payload) => submit(updateSupplier, payload)}
+          />
+        )}
+        {activeTab === "history" && session.role === "manager" && (
+          <StockHistoryPanel movements={data.movements} items={data.items} />
+        )}
         {activeTab === "items" && (
           <ItemsPanel
             items={session.role === "manager" ? filteredItems : filteredItems.filter((item) => (item.Status || "Active") === "Active")}
@@ -429,17 +445,20 @@ function SalesForm({ items, onSubmit }) {
   );
 }
 
-function StockForm({ items, onSubmit }) {
-  const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0 });
+function StockForm({ items, suppliers, onSubmit }) {
+  const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0, Supplier_ID: "", Invoice_No: "" });
+  const activeSuppliers = suppliers.filter((supplier) => (supplier.Status || "Active") === "Active");
 
   return (
     <FormPanel
       title="Add Stock"
       button="Save Stock"
-      onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0 }))}
+      onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Added: 1, Unit_Cost: 0, Supplier_ID: "", Invoice_No: "" }))}
     >
       <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
       <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
+      <SupplierSelect label="Supplier" value={form.Supplier_ID} onChange={(Supplier_ID) => setForm({ Supplier_ID })} options={activeSuppliers} />
+      <Field label="Invoice No" value={form.Invoice_No} onChange={(Invoice_No) => setForm({ Invoice_No })} />
       <Field label="Quantity Added" type="number" value={form.Qty_Added} onChange={(Qty_Added) => setForm({ Qty_Added })} />
       <Field label="Unit Cost" type="number" value={form.Unit_Cost} onChange={(Unit_Cost) => setForm({ Unit_Cost })} />
       <div className="calculation">
@@ -447,6 +466,118 @@ function StockForm({ items, onSubmit }) {
         <strong>{money.format(Number(form.Qty_Added || 0) * Number(form.Unit_Cost || 0))}</strong>
       </div>
     </FormPanel>
+  );
+}
+
+function SuppliersPanel({ suppliers, onSubmit, onUpdate }) {
+  const [form, setForm] = useForm({ Supplier_Name: "", Phone: "", Status: "Active" });
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useForm({ Supplier_ID: "", Supplier_Name: "", Phone: "", Status: "Active" });
+
+  function beginEdit(supplier) {
+    setEditingId(supplier.Supplier_ID);
+    setEditForm({
+      Supplier_ID: supplier.Supplier_ID,
+      Supplier_Name: supplier.Supplier_Name,
+      Phone: supplier.Phone || "",
+      Status: supplier.Status || "Active",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId("");
+    setEditForm({ Supplier_ID: "", Supplier_Name: "", Phone: "", Status: "Active" });
+  }
+
+  function saveEdit(event) {
+    event.preventDefault();
+    onUpdate(editForm);
+    cancelEdit();
+  }
+
+  return (
+    <div className="split">
+      <FormPanel
+        title="Create Supplier"
+        button="Add Supplier"
+        onSubmit={() => onSubmit(form, () => setForm({ Supplier_Name: "", Phone: "", Status: "Active" }))}
+      >
+        <Field label="Supplier Name" value={form.Supplier_Name} onChange={(Supplier_Name) => setForm({ Supplier_Name })} />
+        <Field label="Phone" value={form.Phone} onChange={(Phone) => setForm({ Phone })} />
+        <StatusSelect label="Status" value={form.Status} onChange={(Status) => setForm({ Status })} />
+      </FormPanel>
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Supplier List</h2>
+          <span>{suppliers.length} suppliers</span>
+        </div>
+        {suppliers.length ? (
+          <div className="supplier-list">
+            {suppliers.map((supplier) => (
+              <article className="supplier-card" key={supplier.Supplier_ID}>
+                {editingId === supplier.Supplier_ID ? (
+                  <form className="supplier-edit-form" onSubmit={saveEdit}>
+                    <Field label="Supplier Name" value={editForm.Supplier_Name} onChange={(Supplier_Name) => setEditForm({ Supplier_Name })} />
+                    <Field label="Phone" value={editForm.Phone} onChange={(Phone) => setEditForm({ Phone })} />
+                    <StatusSelect label="Status" value={editForm.Status} onChange={(Status) => setEditForm({ Status })} />
+                    <div className="category-actions">
+                      <button className="primary-button compact-button" type="submit">
+                        <span>Update</span>
+                      </button>
+                      <button className="secondary-button" type="button" onClick={cancelEdit}>
+                        <span>Cancel</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div>
+                      <strong>{supplier.Supplier_Name}</strong>
+                      <span>{supplier.Supplier_ID}</span>
+                    </div>
+                    <span>{supplier.Phone || "-"}</span>
+                    <StatusBadge status={supplier.Status || "Active"} />
+                    <button className="secondary-button" type="button" onClick={() => beginEdit(supplier)}>
+                      <span>Edit</span>
+                    </button>
+                  </>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No suppliers yet" message="Add suppliers before recording stock purchases." />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StockHistoryPanel({ movements, items }) {
+  const itemNames = Object.fromEntries(items.map((item) => [item.Item_ID, item.Item_Name]));
+  const rows = [...movements]
+    .slice(-60)
+    .reverse()
+    .map((movement) => [
+      movement.Date,
+      itemNames[movement.Item_ID] || movement.Item_ID,
+      movement.Type,
+      Number(movement.Qty_Change || 0),
+      Number(movement.Balance_After || 0),
+      movement.Reference || "-",
+    ]);
+
+  return (
+    <section className="panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Stock Movement History</h2>
+          <span>{movements.length} movements</span>
+        </div>
+        <History size={18} />
+      </div>
+      <Table columns={["Date", "Item", "Type", "Change", "Balance", "Ref"]} rows={rows} />
+    </section>
   );
 }
 
@@ -978,6 +1109,22 @@ function Select({ label, value, onChange, options, category = false }) {
         {options.map((option) => (
           <option key={category ? option.Category_ID : option.Item_ID} value={category ? option.Category_ID : option.Item_ID}>
             {category ? option.Category_Name : option.Item_Name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SupplierSelect({ label, value, onChange, options }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">No supplier selected</option>
+        {options.map((supplier) => (
+          <option key={supplier.Supplier_ID} value={supplier.Supplier_ID}>
+            {supplier.Supplier_Name}
           </option>
         ))}
       </select>

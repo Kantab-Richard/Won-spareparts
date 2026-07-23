@@ -607,6 +607,11 @@ h2 {
   gap: 10px;
 }
 
+.supplier-list {
+  display: grid;
+  gap: 10px;
+}
+
 .category-card {
   align-items: center;
   background: #fbfcfe;
@@ -617,6 +622,44 @@ h2 {
   grid-template-columns: 1fr auto auto;
   min-height: 68px;
   padding: 12px;
+}
+
+.supplier-card {
+  align-items: center;
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto auto auto;
+  min-height: 68px;
+  padding: 12px;
+}
+
+.supplier-card > div,
+.supplier-card > span {
+  min-width: 0;
+}
+
+.supplier-card strong,
+.supplier-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supplier-card > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.supplier-edit-form {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: 1.2fr 1fr 160px auto;
 }
 
 .category-card > div {
@@ -1264,12 +1307,19 @@ th {
     grid-template-columns: 1fr auto;
   }
 
-  .category-card .secondary-button {
+  .supplier-card {
+    align-items: start;
+    grid-template-columns: 1fr auto;
+  }
+
+  .category-card .secondary-button,
+  .supplier-card .secondary-button {
     grid-column: span 2;
     width: 100%;
   }
 
-  .category-edit-form {
+  .category-edit-form,
+  .supplier-edit-form {
     grid-template-columns: 1fr;
   }
 

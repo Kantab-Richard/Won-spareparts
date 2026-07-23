@@ -13,8 +13,18 @@ const SHEETS = {
   },
   stockIn: {
     name: 'Stock_In',
-    headers: ['StockIn_ID', 'Date', 'Item_ID', 'Qty_Added', 'Unit_Cost', 'Total_Cost'],
+    headers: ['StockIn_ID', 'Date', 'Item_ID', 'Qty_Added', 'Unit_Cost', 'Total_Cost', 'Supplier_ID', 'Invoice_No'],
     prefix: 'STK',
+  },
+  suppliers: {
+    name: 'Suppliers',
+    headers: ['Supplier_ID', 'Supplier_Name', 'Phone', 'Status'],
+    prefix: 'SUP',
+  },
+  movements: {
+    name: 'Stock_Movements',
+    headers: ['Movement_ID', 'Date', 'Item_ID', 'Type', 'Qty_Change', 'Balance_After', 'Reference', 'Note'],
+    prefix: 'MOV',
   },
   sales: {
     name: 'Sales',
@@ -44,6 +54,8 @@ function doPost(event) {
     if (body.action === 'updateCategory') return jsonResponse(updateCategory(payload));
     if (body.action === 'addItem') return jsonResponse(addItem(payload));
     if (body.action === 'updateItem') return jsonResponse(updateItem(payload));
+    if (body.action === 'addSupplier') return jsonResponse(addSupplier(payload));
+    if (body.action === 'updateSupplier') return jsonResponse(updateSupplier(payload));
     if (body.action === 'addStock') return jsonResponse(addStock(payload));
     if (body.action === 'addSale') return jsonResponse(addSale(payload));
     if (body.action === 'addExpense') return jsonResponse(addExpense(payload));
@@ -95,15 +107,20 @@ function updateCategory(payload) {
 
 function addItem(payload) {
   requireFields(payload, ['Item_Name', 'Category_ID']);
+  const nextItemId = nextId('items');
+  const openingStock = number(payload.Current_Stock);
   appendObject('items', {
-    Item_ID: nextId('items'),
+    Item_ID: nextItemId,
     Item_Name: payload.Item_Name,
     Category_ID: payload.Category_ID,
     Cost_Price: number(payload.Cost_Price),
     Selling_Price: number(payload.Selling_Price),
-    Current_Stock: number(payload.Current_Stock),
+    Current_Stock: openingStock,
     Status: payload.Status || 'Active',
   });
+  if (openingStock !== 0) {
+    appendMovement(payload.Date || new Date(), nextItemId, 'Opening Stock', openingStock, openingStock, nextItemId, 'New item opening balance');
+  }
   return { ok: true, data: getDashboardData() };
 }
 
@@ -113,18 +130,57 @@ function updateItem(payload) {
   const rows = readObjects('items');
   const index = rows.findIndex((row) => row.Item_ID === payload.Item_ID);
   if (index === -1) throw new Error('Item not found');
+  const oldStock = number(rows[index].Current_Stock);
+  const nextStock = number(payload.Current_Stock);
 
   const updates = {
     Item_Name: payload.Item_Name,
     Category_ID: payload.Category_ID,
     Cost_Price: number(payload.Cost_Price),
     Selling_Price: number(payload.Selling_Price),
-    Current_Stock: number(payload.Current_Stock),
+    Current_Stock: nextStock,
     Status: payload.Status,
   };
 
   Object.keys(updates).forEach((header) => {
     const column = SHEETS.items.headers.indexOf(header) + 1;
+    sheet.getRange(index + 2, column).setValue(updates[header]);
+  });
+
+  const stockDelta = nextStock - oldStock;
+  if (stockDelta !== 0) {
+    appendMovement(new Date(), payload.Item_ID, 'Manual Adjustment', stockDelta, nextStock, payload.Item_ID, 'Manager updated item stock');
+  }
+
+  return { ok: true, data: getDashboardData() };
+}
+
+function addSupplier(payload) {
+  requireFields(payload, ['Supplier_Name']);
+  appendObject('suppliers', {
+    Supplier_ID: nextId('suppliers'),
+    Supplier_Name: payload.Supplier_Name,
+    Phone: payload.Phone || '',
+    Status: payload.Status || 'Active',
+  });
+  return { ok: true, data: getDashboardData() };
+}
+
+function updateSupplier(payload) {
+  requireFields(payload, ['Supplier_ID', 'Supplier_Name', 'Status']);
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.suppliers.name);
+  const rows = readObjects('suppliers');
+  const index = rows.findIndex((row) => row.Supplier_ID === payload.Supplier_ID);
+  if (index === -1) throw new Error('Supplier not found');
+
+  const updates = {
+    Supplier_Name: payload.Supplier_Name,
+    Phone: payload.Phone || '',
+    Status: payload.Status,
+  };
+
+  Object.keys(updates).forEach((header) => {
+    const column = SHEETS.suppliers.headers.indexOf(header) + 1;
     sheet.getRange(index + 2, column).setValue(updates[header]);
   });
 
@@ -137,15 +193,20 @@ function addStock(payload) {
   if ((item.Status || 'Active') !== 'Active') throw new Error('This item is inactive');
   const qty = number(payload.Qty_Added);
   const unitCost = number(payload.Unit_Cost);
+  const stockInId = nextId('stockIn');
+  const nextBalance = number(item.Current_Stock) + qty;
   appendObject('stockIn', {
-    StockIn_ID: nextId('stockIn'),
+    StockIn_ID: stockInId,
     Date: payload.Date,
     Item_ID: payload.Item_ID,
     Qty_Added: qty,
     Unit_Cost: unitCost,
     Total_Cost: qty * unitCost,
+    Supplier_ID: payload.Supplier_ID || '',
+    Invoice_No: payload.Invoice_No || '',
   });
   updateItemStock(payload.Item_ID, qty);
+  appendMovement(payload.Date, payload.Item_ID, 'Stock In', qty, nextBalance, stockInId, payload.Invoice_No || 'Stock purchase');
   return { ok: true, data: getDashboardData() };
 }
 
@@ -159,8 +220,9 @@ function addSale(payload) {
 
   const sellingPrice = number(item.Selling_Price);
   const costPrice = number(item.Cost_Price);
+  const saleId = nextId('sales');
   appendObject('sales', {
-    Sale_ID: nextId('sales'),
+    Sale_ID: saleId,
     Date: payload.Date,
     Item_ID: payload.Item_ID,
     Qty_Sold: qty,
@@ -170,6 +232,7 @@ function addSale(payload) {
     Total_COGS: qty * costPrice,
   });
   updateItemStock(payload.Item_ID, -qty);
+  appendMovement(payload.Date, payload.Item_ID, 'Sale', -qty, currentStock - qty, saleId, 'Sale deduction');
   return { ok: true, data: getDashboardData() };
 }
 
@@ -190,6 +253,8 @@ function getDashboardData() {
     categories: readObjects('categories'),
     items: readObjects('items'),
     stockIn: readObjects('stockIn'),
+    suppliers: readObjects('suppliers'),
+    movements: readObjects('movements'),
     sales: readObjects('sales'),
     expenses: readObjects('expenses'),
   };
@@ -261,6 +326,19 @@ function updateItemStock(itemId, delta) {
   const stockColumn = SHEETS.items.headers.indexOf('Current_Stock') + 1;
   const currentStock = number(rows[index].Current_Stock);
   sheet.getRange(index + 2, stockColumn).setValue(currentStock + delta);
+}
+
+function appendMovement(date, itemId, type, qtyChange, balanceAfter, reference, note) {
+  appendObject('movements', {
+    Movement_ID: nextId('movements'),
+    Date: date,
+    Item_ID: itemId,
+    Type: type,
+    Qty_Change: number(qtyChange),
+    Balance_After: number(balanceAfter),
+    Reference: reference || '',
+    Note: note || '',
+  });
 }
 
 function requireFields(payload, fields) {
