@@ -451,6 +451,7 @@ function StockForm({ items, onSubmit }) {
 function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
   const [mode, setMode] = useState("list");
   const [editingId, setEditingId] = useState("");
+  const [listOptions, setListOptions] = useState({ status: "all", category: "all", sort: "name" });
   const [editForm, setEditForm] = useForm({
     Item_ID: "",
     Item_Name: "",
@@ -469,7 +470,25 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
     Cost_Price: 0,
     Selling_Price: 0,
     Current_Stock: 0,
+    Status: "Active",
   });
+  const visibleItems = useMemo(() => {
+    const nextItems = items.filter((item) => {
+      const statusMatches = listOptions.status === "all" || (item.Status || "Active") === listOptions.status;
+      const categoryMatches = listOptions.category === "all" || item.Category_ID === listOptions.category;
+      return statusMatches && categoryMatches;
+    });
+
+    return [...nextItems].sort((first, second) => {
+      if (listOptions.sort === "stock") {
+        return Number(first.Current_Stock || 0) - Number(second.Current_Stock || 0);
+      }
+      if (listOptions.sort === "price") {
+        return Number(second.Selling_Price || 0) - Number(first.Selling_Price || 0);
+      }
+      return String(first.Item_Name || "").localeCompare(String(second.Item_Name || ""));
+    });
+  }, [items, listOptions]);
 
   function beginEdit(item) {
     setEditingId(item.Item_ID);
@@ -497,7 +516,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit(form, () => {
-            setForm({ Item_Name: "", Category_ID: "", Cost_Price: 0, Selling_Price: 0, Current_Stock: 0 });
+            setForm({ Item_Name: "", Category_ID: "", Cost_Price: 0, Selling_Price: 0, Current_Stock: 0, Status: "Active" });
             setMode("list");
           });
         }}
@@ -538,7 +557,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
       <div className="panel-heading item-list-heading">
         <div>
           <h2>Item List</h2>
-          <span>{items.length} items</span>
+          <span>{visibleItems.length} of {items.length} items</span>
         </div>
         <button className="primary-button compact-button" type="button" onClick={() => setMode("create")}>
           <Plus size={18} />
@@ -546,8 +565,41 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
         </button>
       </div>
       {items.length ? (
-        <div className="item-card-list">
-          {items.map((item) => (
+        <>
+          <div className="item-list-controls">
+            {canManageItems && (
+              <label>
+                <span>Status</span>
+                <select value={listOptions.status} onChange={(event) => setListOptions((current) => ({ ...current, status: event.target.value }))}>
+                  <option value="all">All</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </label>
+            )}
+            <label>
+              <span>Category</span>
+              <select value={listOptions.category} onChange={(event) => setListOptions((current) => ({ ...current, category: event.target.value }))}>
+                <option value="all">All categories</option>
+                {categories.map((category) => (
+                  <option key={category.Category_ID} value={category.Category_ID}>
+                    {category.Category_Name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Sort</span>
+              <select value={listOptions.sort} onChange={(event) => setListOptions((current) => ({ ...current, sort: event.target.value }))}>
+                <option value="name">Name A-Z</option>
+                <option value="stock">Lowest stock</option>
+                <option value="price">Highest price</option>
+              </select>
+            </label>
+          </div>
+          {visibleItems.length ? (
+            <div className="item-card-list">
+              {visibleItems.map((item) => (
             <article className="item-card" key={item.Item_ID}>
               {editingId === item.Item_ID ? (
                 <form className="item-edit-form" onSubmit={saveEdit}>
@@ -594,8 +646,12 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                 </>
               )}
             </article>
-          ))}
-        </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No matching items" message="Change the filter or search text to show more items." />
+          )}
+        </>
       ) : (
         <EmptyState
           title="No items created"

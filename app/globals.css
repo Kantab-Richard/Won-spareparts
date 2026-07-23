@@ -522,6 +522,41 @@ h2 {
   gap: 10px;
 }
 
+.item-list-controls {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.item-list-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.item-list-controls span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.item-list-controls select {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 9px;
+}
+
 .item-card {
   align-items: center;
   background: #fbfcfe;
@@ -1146,6 +1181,16 @@ th {
     width: 100%;
   }
 
+  .item-list-controls {
+    gap: 8px;
+    grid-template-columns: 1fr 1fr;
+    padding: 8px;
+  }
+
+  .item-list-controls label:last-child {
+    grid-column: span 2;
+  }
+
   .item-card {
     align-items: center;
     gap: 8px;
@@ -1288,6 +1333,14 @@ th {
   .item-card {
     grid-template-columns: minmax(0, 1fr) 48px minmax(78px, auto) 32px;
     padding: 9px;
+  }
+
+  .item-list-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .item-list-controls label:last-child {
+    grid-column: span 1;
   }
 
   .item-card .item-price-cell strong {
