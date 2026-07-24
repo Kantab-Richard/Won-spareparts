@@ -18,13 +18,15 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Truck,
   Tags,
   TriangleAlert,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { addCategory, addExpense, addItem, addSale, addStock, addSupplier, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
+import { addBasketSale, addCategory, addExpense, addItem, addSale, addStock, addSupplier, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -66,6 +68,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState({ mode: "today", start: today, end: today });
+  const [saleCart, setSaleCart] = useState([]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("wonspareparts-session");
@@ -117,6 +120,48 @@ export default function Home() {
     `${item.Item_Name} ${item.Item_ID} ${item.Status || "Active"}`.toLowerCase().includes(query.toLowerCase())
   );
   const activeItems = data.items.filter((item) => (item.Status || "Active") === "Active");
+
+  function addToCart(item) {
+    setSaleCart((current) => {
+      const existing = current.find((entry) => entry.Item_ID === item.Item_ID);
+      if (existing) {
+        return current.map((entry) =>
+          entry.Item_ID === item.Item_ID
+            ? { ...entry, Qty_Sold: Math.min(Number(item.Current_Stock || 0), Number(entry.Qty_Sold || 0) + 1) }
+            : entry
+        );
+      }
+      return [...current, { Item_ID: item.Item_ID, Qty_Sold: 1 }];
+    });
+    setStatus(`${item.Item_Name} added to sale cart`);
+  }
+
+  function updateCartQty(itemId, qty) {
+    const item = data.items.find((entry) => entry.Item_ID === itemId);
+    const maxQty = Number(item?.Current_Stock || 0);
+    const nextQty = Math.max(1, Math.min(maxQty || 1, Number(qty) || 1));
+    setSaleCart((current) => current.map((entry) => (entry.Item_ID === itemId ? { ...entry, Qty_Sold: nextQty } : entry)));
+  }
+
+  function removeCartItem(itemId) {
+    setSaleCart((current) => current.filter((entry) => entry.Item_ID !== itemId));
+  }
+
+  async function submitBasketSale(date) {
+    if (!saleCart.length) {
+      setStatus("Sale cart is empty");
+      return;
+    }
+    setStatus("Saving basket sale...");
+    try {
+      await addBasketSale({ Date: date, Items: saleCart });
+      setSaleCart([]);
+      await loadData();
+      setStatus("Basket sale saved successfully");
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
 
   async function submit(action, payload, reset) {
     setStatus("Saving...");
@@ -247,7 +292,17 @@ export default function Home() {
             onNavigate={setActiveTab}
           />
         )}
-        {activeTab === "sales" && <SalesForm items={activeItems} onSubmit={(payload, reset) => submit(addSale, payload, reset)} />}
+        {activeTab === "sales" && (
+          <SalesForm
+            items={activeItems}
+            cart={saleCart}
+            onSubmit={(payload, reset) => submit(addSale, payload, reset)}
+            onCartQty={updateCartQty}
+            onRemoveCartItem={removeCartItem}
+            onCheckout={submitBasketSale}
+            onClearCart={() => setSaleCart([])}
+          />
+        )}
         {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
         {activeTab === "suppliers" && session.role === "manager" && (
           <SuppliersPanel
@@ -266,6 +321,7 @@ export default function Home() {
             role={session.role}
             onSubmit={(payload, reset) => submit(addItem, payload, reset)}
             onUpdate={(payload) => submit(updateItem, payload)}
+            onAddToCart={addToCart}
           />
         )}
         {activeTab === "expenses" && (
@@ -424,24 +480,84 @@ function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilte
   );
 }
 
-function SalesForm({ items, onSubmit }) {
+function SalesForm({ items, cart, onSubmit, onCartQty, onRemoveCartItem, onCheckout, onClearCart }) {
   const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Sold: 1 });
+  const [cartDate, setCartDate] = useState(today);
   const selected = items.find((item) => item.Item_ID === form.Item_ID);
+  const itemMap = Object.fromEntries(items.map((item) => [item.Item_ID, item]));
+  const cartRows = cart
+    .map((entry) => ({ ...entry, item: itemMap[entry.Item_ID] }))
+    .filter((entry) => entry.item);
+  const cartTotal = cartRows.reduce((sum, entry) => sum + Number(entry.Qty_Sold || 0) * Number(entry.item.Selling_Price || 0), 0);
 
   return (
-    <FormPanel
-      title="Record Sale"
-      button="Save Sale"
-      onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Sold: 1 }))}
-    >
-      <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
-      <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
-      <Field label="Quantity Sold" type="number" value={form.Qty_Sold} onChange={(Qty_Sold) => setForm({ Qty_Sold })} />
-      <div className="calculation">
-        <span>Expected total</span>
-        <strong>{money.format(Number(form.Qty_Sold || 0) * Number(selected?.Selling_Price || 0))}</strong>
-      </div>
-    </FormPanel>
+    <div className="split sales-layout">
+      <FormPanel
+        title="Record Single Sale"
+        button="Save Sale"
+        onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Sold: 1 }))}
+      >
+        <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
+        <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
+        <Field label="Quantity Sold" type="number" value={form.Qty_Sold} onChange={(Qty_Sold) => setForm({ Qty_Sold })} />
+        <div className="calculation">
+          <span>Expected total</span>
+          <strong>{money.format(Number(form.Qty_Sold || 0) * Number(selected?.Selling_Price || 0))}</strong>
+        </div>
+      </FormPanel>
+
+      <section className="panel sale-cart-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Sale Cart</h2>
+            <span>{cartRows.length} items in basket</span>
+          </div>
+          <ShoppingCart size={18} />
+        </div>
+        <Field label="Sale Date" type="date" value={cartDate} onChange={setCartDate} />
+        {cartRows.length ? (
+          <>
+            <div className="cart-list">
+              {cartRows.map((entry) => (
+                <article className="cart-row" key={entry.Item_ID}>
+                  <div>
+                    <strong>{entry.item.Item_Name}</strong>
+                    <span>{money.format(Number(entry.item.Selling_Price || 0))} each</span>
+                  </div>
+                  <input
+                    aria-label={`Quantity for ${entry.item.Item_Name}`}
+                    min="1"
+                    max={Number(entry.item.Current_Stock || 1)}
+                    type="number"
+                    value={entry.Qty_Sold}
+                    onChange={(event) => onCartQty(entry.Item_ID, event.target.value)}
+                  />
+                  <strong>{money.format(Number(entry.Qty_Sold || 0) * Number(entry.item.Selling_Price || 0))}</strong>
+                  <button className="icon-button" type="button" onClick={() => onRemoveCartItem(entry.Item_ID)} title="Remove from cart">
+                    <Trash2 size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+            <div className="cart-total">
+              <span>Total</span>
+              <strong>{money.format(cartTotal)}</strong>
+            </div>
+            <div className="cart-actions">
+              <button className="primary-button" type="button" onClick={() => onCheckout(cartDate)}>
+                <ShoppingCart size={18} />
+                <span>Save Basket Sale</span>
+              </button>
+              <button className="secondary-button" type="button" onClick={onClearCart}>
+                <span>Clear</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <EmptyState title="Cart is empty" message="Use Add to Cart from the item list to build a basket sale." />
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -581,7 +697,7 @@ function StockHistoryPanel({ movements, items }) {
   );
 }
 
-function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
+function ItemsPanel({ items, categories, role, onSubmit, onUpdate, onAddToCart }) {
   const [mode, setMode] = useState("list");
   const [editingId, setEditingId] = useState("");
   const [listOptions, setListOptions] = useState({ status: "all", category: "all", sort: "name" });
@@ -733,7 +849,7 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
           {visibleItems.length ? (
             <div className="item-card-list">
               {visibleItems.map((item) => (
-            <article className="item-card" key={item.Item_ID}>
+            <article className={canManageItems ? "item-card" : "item-card sales-item-card"} key={item.Item_ID}>
               {editingId === item.Item_ID ? (
                 <form className="item-edit-form" onSubmit={saveEdit}>
                   <Field label="Item Name" value={editForm.Item_Name} onChange={(Item_Name) => setEditForm({ Item_Name })} />
@@ -770,6 +886,12 @@ function ItemsPanel({ items, categories, role, onSubmit, onUpdate }) {
                     <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
                   </div>
                   <StatusBadge status={item.Status || "Active"} />
+                  {(item.Status || "Active") === "Active" && Number(item.Current_Stock || 0) > 0 && (
+                    <button className="primary-button compact-button item-cart-button" type="button" onClick={() => onAddToCart(item)} title="Add to sale cart">
+                      <ShoppingCart size={15} />
+                      <span>Add</span>
+                    </button>
+                  )}
                   {canManageItems && (
                     <button className="secondary-button compact-button item-edit-button" type="button" onClick={() => beginEdit(item)} title="Edit item">
                       <Pencil size={15} />

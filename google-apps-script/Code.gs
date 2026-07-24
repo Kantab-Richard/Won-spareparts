@@ -28,7 +28,7 @@ const SHEETS = {
   },
   sales: {
     name: 'Sales',
-    headers: ['Sale_ID', 'Date', 'Item_ID', 'Qty_Sold', 'Unit_Selling_Price', 'Unit_Cost_Price', 'Total_Revenue', 'Total_COGS'],
+    headers: ['Sale_ID', 'Date', 'Item_ID', 'Qty_Sold', 'Unit_Selling_Price', 'Unit_Cost_Price', 'Total_Revenue', 'Total_COGS', 'Receipt_No'],
     prefix: 'SAL',
   },
   expenses: {
@@ -58,6 +58,7 @@ function doPost(event) {
     if (body.action === 'updateSupplier') return jsonResponse(updateSupplier(payload));
     if (body.action === 'addStock') return jsonResponse(addStock(payload));
     if (body.action === 'addSale') return jsonResponse(addSale(payload));
+    if (body.action === 'addBasketSale') return jsonResponse(addBasketSale(payload));
     if (body.action === 'addExpense') return jsonResponse(addExpense(payload));
 
     throw new Error('Unknown action');
@@ -230,10 +231,55 @@ function addSale(payload) {
     Unit_Cost_Price: costPrice,
     Total_Revenue: qty * sellingPrice,
     Total_COGS: qty * costPrice,
+    Receipt_No: payload.Receipt_No || saleId,
   });
   updateItemStock(payload.Item_ID, -qty);
   appendMovement(payload.Date, payload.Item_ID, 'Sale', -qty, currentStock - qty, saleId, 'Sale deduction');
   return { ok: true, data: getDashboardData() };
+}
+
+function addBasketSale(payload) {
+  requireFields(payload, ['Date', 'Items']);
+  if (!Array.isArray(payload.Items) || payload.Items.length === 0) throw new Error('Sale cart is empty');
+
+  const receiptNo = `RCT-${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss')}`;
+  const grouped = {};
+  payload.Items.forEach((entry) => {
+    if (!entry.Item_ID) throw new Error('Cart item is missing');
+    grouped[entry.Item_ID] = (grouped[entry.Item_ID] || 0) + number(entry.Qty_Sold);
+  });
+
+  Object.keys(grouped).forEach((itemId) => {
+    if (grouped[itemId] <= 0) throw new Error('Cart quantities must be more than zero');
+    const item = findItem(itemId);
+    if ((item.Status || 'Active') !== 'Active') throw new Error(`${item.Item_Name} is inactive`);
+    if (grouped[itemId] > number(item.Current_Stock)) throw new Error(`Not enough stock for ${item.Item_Name}`);
+  });
+
+  Object.keys(grouped).forEach((itemId) => {
+    const item = findItem(itemId);
+    const qty = grouped[itemId];
+    const currentStock = number(item.Current_Stock);
+    const sellingPrice = number(item.Selling_Price);
+    const costPrice = number(item.Cost_Price);
+    const saleId = nextId('sales');
+
+    appendObject('sales', {
+      Sale_ID: saleId,
+      Date: payload.Date,
+      Item_ID: itemId,
+      Qty_Sold: qty,
+      Unit_Selling_Price: sellingPrice,
+      Unit_Cost_Price: costPrice,
+      Total_Revenue: qty * sellingPrice,
+      Total_COGS: qty * costPrice,
+      Receipt_No: receiptNo,
+    });
+    updateItemStock(itemId, -qty);
+    appendMovement(payload.Date, itemId, 'Basket Sale', -qty, currentStock - qty, receiptNo, 'Basket sale deduction');
+  });
+
+  return { ok: true, receiptNo: receiptNo, data: getDashboardData() };
 }
 
 function addExpense(payload) {
