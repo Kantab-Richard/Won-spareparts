@@ -1,0 +1,15 @@
+WONSPAREPARTS Supply Test Sheet
+Supplier: Accra Auto Parts Wholesale
+Invoice No: SUP-TEST-2026-001
+Date: 2026-09-08
+
+Supply Items
+Item Name, Item Code, Qty, Unit Cost (GHS), Total (GHS)
+Plug CD110, ITM-001, 6, 7.00, 42.00
+Shell Advance, ITM-002, 4, 50.00, 200.00
+Shell Helix, ITM-003, 3, 55.00, 165.00
+Clutch cable, ITM-004, 5, 30.00, 150.00
+Brake Pad, NEW-005, 8, 25.00, 200.00
+Spark Plug, NEW-006, 10, 12.00, 120.00
+
+Grand Total: GHc 877.00
