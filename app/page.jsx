@@ -26,7 +26,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { addBasketSale, addCategory, addExpense, addItem, addSale, addStock, addSupplier, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
+import { addBasketSale, addCategory, addExpense, addItem, addSale, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -41,6 +41,7 @@ const tabs = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "sales", label: "Sales", icon: CircleDollarSign },
   { id: "salesHistory", label: "Sales History", icon: ClipboardList },
+  { id: "aiSupply", label: "AI Supply Scan", icon: Search },
   { id: "stock", label: "Stock In", icon: PackagePlus },
   { id: "suppliers", label: "Suppliers", icon: Truck },
   { id: "history", label: "Stock History", icon: History },
@@ -161,6 +162,32 @@ export default function Home() {
       setStatus("Basket sale saved successfully");
     } catch (error) {
       setStatus(error.message);
+    }
+  }
+
+  async function submitScannedStock(scan) {
+    const rows = scan.rows.filter((row) => row.Item_ID && Number(row.quantity || 0) > 0);
+    if (!rows.length) {
+      setStatus("No matched supply rows to save");
+      return;
+    }
+    setStatus("Saving scanned supply items...");
+    try {
+      for (const row of rows) {
+        await addStock({
+          Date: scan.Date,
+          Item_ID: row.Item_ID,
+          Qty_Added: row.quantity,
+          Unit_Cost: row.unitCost,
+          Supplier_ID: scan.Supplier_ID,
+          Invoice_No: scan.Invoice_No,
+        });
+      }
+      await loadData();
+      setStatus(`${rows.length} scanned supply items saved`);
+    } catch (error) {
+      setStatus(error.message);
+      throw error;
     }
   }
 
@@ -305,6 +332,14 @@ export default function Home() {
           />
         )}
         {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "aiSupply" && session.role === "manager" && (
+          <AiSupplyScanPanel
+            items={activeItems}
+            suppliers={data.suppliers}
+            onAnalyze={analyzeSupplyScan}
+            onSaveRows={submitScannedStock}
+          />
+        )}
         {activeTab === "suppliers" && session.role === "manager" && (
           <SuppliersPanel
             suppliers={data.suppliers}
@@ -559,6 +594,156 @@ function SalesForm({ items, cart, onSubmit, onCartQty, onRemoveCartItem, onCheck
           </>
         ) : (
           <EmptyState title="Cart is empty" message="Use Add to Cart from the item list to build a basket sale." />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AiSupplyScanPanel({ items, suppliers, onAnalyze, onSaveRows }) {
+  const [form, setForm] = useForm({ Date: today, Supplier_ID: "", Invoice_No: "", text: "", imageDataUrl: "", imageName: "" });
+  const [rows, setRows] = useState([]);
+  const [message, setMessage] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const activeSuppliers = suppliers.filter((supplier) => (supplier.Status || "Active") === "Active");
+  const matchedRows = rows.filter((row) => row.Item_ID && Number(row.quantity || 0) > 0);
+  const totalCost = matchedRows.reduce((sum, row) => sum + Number(row.quantity || 0) * Number(row.unitCost || 0), 0);
+
+  function readImage(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("Please upload an image file.");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setMessage("Please upload an image smaller than 4 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm({ imageDataUrl: String(reader.result || ""), imageName: file.name });
+      setMessage(`${file.name} ready for scanning`);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function scanSupply() {
+    setScanning(true);
+    setMessage("Scanning supply sheet...");
+    try {
+      const result = await onAnalyze({ text: form.text, imageDataUrl: form.imageDataUrl });
+      const nextRows = (result.items || []).map((row) => ({
+        ...row,
+        Item_ID: guessItemId(row.itemName, items),
+      }));
+      setRows(nextRows);
+      if (result.transcript) {
+        setForm({ text: result.transcript });
+      }
+      setMessage(result.message || `${nextRows.length} supply items found. Review before saving.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function updateRow(index, patch) {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+
+  async function saveRows() {
+    setSaving(true);
+    setMessage("Saving reviewed supply rows...");
+    try {
+      await onSaveRows({
+        Date: form.Date,
+        Supplier_ID: form.Supplier_ID,
+        Invoice_No: form.Invoice_No,
+        rows: matchedRows,
+      });
+      setRows([]);
+      setForm({ text: "", imageDataUrl: "", imageName: "" });
+      setMessage(`${matchedRows.length} supply rows saved to stock.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="ai-scan-grid">
+      <section className="panel ai-scan-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>AI Supply Scan</h2>
+            <span>Scan supplier sheets into stock-in rows.</span>
+          </div>
+          <Search size={18} />
+        </div>
+        <div className="scan-meta-grid">
+          <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
+          <SupplierSelect label="Supplier" value={form.Supplier_ID} onChange={(Supplier_ID) => setForm({ Supplier_ID })} options={activeSuppliers} />
+          <Field label="Invoice No" value={form.Invoice_No} onChange={(Invoice_No) => setForm({ Invoice_No })} />
+        </div>
+        <label className="scan-upload">
+          <input accept="image/*" type="file" onChange={readImage} />
+          <span>{form.imageName || "Upload supply sheet photo"}</span>
+        </label>
+        <label className="field">
+          <span>Paste Supply Text</span>
+          <textarea
+            value={form.text}
+            onChange={(event) => setForm({ text: event.target.value })}
+            placeholder="Example: Brake Pad, 12, 35"
+          />
+        </label>
+        {message && <p className="scan-message">{message}</p>}
+        <button className="primary-button" type="button" onClick={scanSupply} disabled={scanning || (!form.text && !form.imageDataUrl)}>
+          <Search size={18} />
+          <span>{scanning ? "Scanning..." : "Scan Supply Sheet"}</span>
+        </button>
+      </section>
+
+      <section className="panel scan-review-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Review Supply Items</h2>
+            <span>{matchedRows.length} matched rows</span>
+          </div>
+          <PackagePlus size={18} />
+        </div>
+        {rows.length ? (
+          <>
+            <div className="scan-row-list">
+              {rows.map((row, index) => (
+                <article className="scan-row" key={`${row.itemName}-${index}`}>
+                  <div>
+                    <strong>{row.itemName}</strong>
+                    <span>{Math.round(Number(row.confidence || 0) * 100)}% confidence</span>
+                  </div>
+                  <Select label="Match Item" value={row.Item_ID || ""} onChange={(Item_ID) => updateRow(index, { Item_ID })} options={items} />
+                  <Field label="Qty" type="number" value={row.quantity || 0} onChange={(quantity) => updateRow(index, { quantity })} />
+                  <Field label="Unit Cost" type="number" value={row.unitCost || 0} onChange={(unitCost) => updateRow(index, { unitCost })} />
+                  <strong>{money.format(Number(row.quantity || 0) * Number(row.unitCost || 0))}</strong>
+                </article>
+              ))}
+            </div>
+            <div className="scan-total">
+              <span>Total stock cost</span>
+              <strong>{money.format(totalCost)}</strong>
+            </div>
+            <button className="primary-button" type="button" onClick={saveRows} disabled={saving || !matchedRows.length}>
+              <PackagePlus size={18} />
+              <span>{saving ? "Saving..." : "Save Reviewed Stock"}</span>
+            </button>
+          </>
+        ) : (
+          <EmptyState title="No scan results yet" message="Upload a supply sheet photo or paste supplier text, then scan it." />
         )}
       </section>
     </div>
@@ -1500,4 +1685,23 @@ function isDateInRange(date, range) {
 
 function formatDateRange(range) {
   return range.start === range.end ? range.start : `${range.start} to ${range.end}`;
+}
+
+function guessItemId(name, items) {
+  const scanName = normalizeName(name);
+  if (!scanName) return "";
+  const exact = items.find((item) => normalizeName(item.Item_Name) === scanName);
+  if (exact) return exact.Item_ID;
+  const partial = items.find((item) => {
+    const itemName = normalizeName(item.Item_Name);
+    return itemName.includes(scanName) || scanName.includes(itemName);
+  });
+  return partial?.Item_ID || "";
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }

@@ -7,6 +7,7 @@ A Vercel-ready sales management system for WONSPAREPARTS using Google Sheets as 
 - Dashboard for daily revenue, gross profit, net profit, and stock value
 - Sales recorder that deducts item stock automatically
 - Stock-in form that increases item stock automatically
+- AI Supply Scan for reading supplier sheets or pasted supply text into stock-in rows
 - Item and category management
 - Expense logger
 - Manager-only settings for updating manager and sales login details
@@ -25,6 +26,8 @@ A Vercel-ready sales management system for WONSPAREPARTS using Google Sheets as 
    ```bash
    APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
    APPS_SCRIPT_TOKEN=change-this-secret-token
+   OPENAI_API_KEY=sk-mnop5678mnop5678mnop5678mnop5678mnop5678
+   OPENAI_MODEL=gpt-4o-mini
    ```
 
 3. Start the app:
@@ -68,6 +71,8 @@ Without an Apps Script URL, the app runs in demo mode with sample records.
    ```bash
    APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
    APPS_SCRIPT_TOKEN=change-this-secret-token
+   OPENAI_API_KEY=sk-your-openai-api-key
+   OPENAI_MODEL=gpt-4o-mini
    ```
 
 7. Click **Deploy**.

@@ -669,6 +669,123 @@ h2 {
   justify-content: flex-end;
 }
 
+.ai-scan-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(300px, 430px) 1fr;
+}
+
+.ai-scan-panel,
+.scan-review-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.scan-meta-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+.scan-upload {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px dashed #b9c8d8;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 54px;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.scan-upload input {
+  display: none;
+}
+
+.field textarea {
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 150px;
+  outline: 0;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.field textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(20, 118, 184, 0.12);
+}
+
+.scan-message {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.scan-row-list {
+  display: grid;
+  gap: 10px;
+}
+
+.scan-row {
+  align-items: end;
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1.1fr) 84px 110px auto;
+  padding: 12px;
+}
+
+.scan-row > div:first-child {
+  min-width: 0;
+}
+
+.scan-row strong,
+.scan-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-row span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.scan-total {
+  align-items: center;
+  background: #eef6fb;
+  border: 1px solid #cfe4f3;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+.scan-total span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.scan-total strong {
+  font-size: 20px;
+}
+
 .sales-history-grid {
   display: grid;
   gap: 16px;
@@ -1121,6 +1238,24 @@ th {
   .category-layout,
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ai-scan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .scan-row > div:first-child,
+  .scan-row .field:nth-child(2),
+  .scan-row > strong {
+    grid-column: span 2;
+  }
+
+  .scan-row > strong {
+    text-align: right;
   }
 
   .sales-history-grid {
