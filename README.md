@@ -84,6 +84,8 @@ Spark Plug, 10, 12
 8. Set access to **Anyone**.
 9. Copy the `/exec` web app URL into `.env.local` and Vercel.
 
+When `google-apps-script/Code.gs` changes, paste the new code into Apps Script and create a new web app deployment version so Google Sheets receives the latest actions.
+
 ## Vercel Deployment
 
 1. Make sure the app builds locally:
@@ -146,5 +148,6 @@ This project includes PWA support, so users can install it on phones and desktop
 - `Stock_In`: `StockIn_ID`, `Date`, `Item_ID`, `Qty_Added`, `Unit_Cost`, `Total_Cost`, `Supplier_ID`, `Invoice_No`
 - `Suppliers`: `Supplier_ID`, `Supplier_Name`, `Phone`, `Status`
 - `Stock_Movements`: `Movement_ID`, `Date`, `Item_ID`, `Type`, `Qty_Change`, `Balance_After`, `Reference`, `Note`
-- `Sales`: `Sale_ID`, `Date`, `Item_ID`, `Qty_Sold`, `Unit_Selling_Price`, `Unit_Cost_Price`, `Total_Revenue`, `Total_COGS`, `Receipt_No`
+- `Sales`: `Sale_ID`, `Date`, `Item_ID`, `Qty_Sold`, `Unit_Selling_Price`, `Unit_Cost_Price`, `Total_Revenue`, `Total_COGS`, `Receipt_No`, `Sales_Rep_ID`, `Sales_Rep_Name`
+- `Sales_Reps`: `Rep_ID`, `Rep_Name`, `Username`, `Password`, `Phone`, `Status`
 - `Expenses`: `Expense_ID`, `Date`, `Description`, `Amount`

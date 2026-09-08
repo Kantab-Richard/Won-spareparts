@@ -28,8 +28,13 @@ const SHEETS = {
   },
   sales: {
     name: 'Sales',
-    headers: ['Sale_ID', 'Date', 'Item_ID', 'Qty_Sold', 'Unit_Selling_Price', 'Unit_Cost_Price', 'Total_Revenue', 'Total_COGS', 'Receipt_No'],
+    headers: ['Sale_ID', 'Date', 'Item_ID', 'Qty_Sold', 'Unit_Selling_Price', 'Unit_Cost_Price', 'Total_Revenue', 'Total_COGS', 'Receipt_No', 'Sales_Rep_ID', 'Sales_Rep_Name'],
     prefix: 'SAL',
+  },
+  salesReps: {
+    name: 'Sales_Reps',
+    headers: ['Rep_ID', 'Rep_Name', 'Username', 'Password', 'Phone', 'Status'],
+    prefix: 'REP',
   },
   expenses: {
     name: 'Expenses',
@@ -59,6 +64,8 @@ function doPost(event) {
     if (body.action === 'addStock') return jsonResponse(addStock(payload));
     if (body.action === 'addSale') return jsonResponse(addSale(payload));
     if (body.action === 'addBasketSale') return jsonResponse(addBasketSale(payload));
+    if (body.action === 'addSalesRep') return jsonResponse(addSalesRep(payload));
+    if (body.action === 'updateSalesRep') return jsonResponse(updateSalesRep(payload));
     if (body.action === 'addExpense') return jsonResponse(addExpense(payload));
 
     throw new Error('Unknown action');
@@ -188,6 +195,44 @@ function updateSupplier(payload) {
   return { ok: true, data: getDashboardData() };
 }
 
+function addSalesRep(payload) {
+  requireFields(payload, ['Rep_Name', 'Username', 'Password']);
+  ensureUniqueRepUsername(payload.Username);
+  appendObject('salesReps', {
+    Rep_ID: nextId('salesReps'),
+    Rep_Name: payload.Rep_Name,
+    Username: payload.Username,
+    Password: payload.Password,
+    Phone: payload.Phone || '',
+    Status: payload.Status || 'Active',
+  });
+  return { ok: true, data: getDashboardData() };
+}
+
+function updateSalesRep(payload) {
+  requireFields(payload, ['Rep_ID', 'Rep_Name', 'Username', 'Password', 'Status']);
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.salesReps.name);
+  const rows = readObjects('salesReps');
+  const index = rows.findIndex((row) => row.Rep_ID === payload.Rep_ID);
+  if (index === -1) throw new Error('Sales representative not found');
+  ensureUniqueRepUsername(payload.Username, payload.Rep_ID);
+
+  const updates = {
+    Rep_Name: payload.Rep_Name,
+    Username: payload.Username,
+    Password: payload.Password,
+    Phone: payload.Phone || '',
+    Status: payload.Status,
+  };
+
+  Object.keys(updates).forEach((header) => {
+    const column = SHEETS.salesReps.headers.indexOf(header) + 1;
+    sheet.getRange(index + 2, column).setValue(updates[header]);
+  });
+
+  return { ok: true, data: getDashboardData() };
+}
+
 function addStock(payload) {
   requireFields(payload, ['Date', 'Item_ID', 'Qty_Added', 'Unit_Cost']);
   const item = findItem(payload.Item_ID);
@@ -232,10 +277,12 @@ function addSale(payload) {
     Total_Revenue: qty * sellingPrice,
     Total_COGS: qty * costPrice,
     Receipt_No: payload.Receipt_No || saleId,
+    Sales_Rep_ID: payload.Sales_Rep_ID || '',
+    Sales_Rep_Name: payload.Sales_Rep_Name || '',
   });
   updateItemStock(payload.Item_ID, -qty);
   appendMovement(payload.Date, payload.Item_ID, 'Sale', -qty, currentStock - qty, saleId, 'Sale deduction');
-  return { ok: true, data: getDashboardData() };
+  return { ok: true, saleId: saleId, receiptNo: payload.Receipt_No || saleId, data: getDashboardData() };
 }
 
 function addBasketSale(payload) {
@@ -274,6 +321,8 @@ function addBasketSale(payload) {
       Total_Revenue: qty * sellingPrice,
       Total_COGS: qty * costPrice,
       Receipt_No: receiptNo,
+      Sales_Rep_ID: payload.Sales_Rep_ID || '',
+      Sales_Rep_Name: payload.Sales_Rep_Name || '',
     });
     updateItemStock(itemId, -qty);
     appendMovement(payload.Date, itemId, 'Basket Sale', -qty, currentStock - qty, receiptNo, 'Basket sale deduction');
@@ -302,6 +351,7 @@ function getDashboardData() {
     suppliers: readObjects('suppliers'),
     movements: readObjects('movements'),
     sales: readObjects('sales'),
+    salesReps: readObjects('salesReps'),
     expenses: readObjects('expenses'),
   };
 }
@@ -385,6 +435,16 @@ function appendMovement(date, itemId, type, qtyChange, balanceAfter, reference, 
     Reference: reference || '',
     Note: note || '',
   });
+}
+
+function ensureUniqueRepUsername(username, currentRepId) {
+  const normalized = String(username || '').trim().toLowerCase();
+  const managerUsername = 'manager';
+  if (normalized === managerUsername) throw new Error('Sales representative username cannot be manager');
+  const duplicate = readObjects('salesReps').find((rep) => {
+    return String(rep.Username || '').trim().toLowerCase() === normalized && rep.Rep_ID !== currentRepId;
+  });
+  if (duplicate) throw new Error('This sales representative username is already used');
 }
 
 function requireFields(payload, fields) {

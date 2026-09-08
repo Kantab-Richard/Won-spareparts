@@ -94,7 +94,7 @@ function buildChatBody(provider, { text, imageDataUrl }) {
     {
       type: "text",
       text:
-        "Extract supply or invoice stock items for an auto parts shop. Return JSON only with this shape: {\"transcript\":\"...\",\"items\":[{\"itemName\":\"...\",\"quantity\":1,\"unitCost\":1,\"totalCost\":1,\"confidence\":0.9}]}. Identify itemName, quantity, unitCost, totalCost, and confidence. Use empty string or 0 when missing. Do not invent values.",
+        "Extract supply or invoice stock items for an auto parts shop. Return JSON only with this shape: {\"transcript\":\"...\",\"items\":[{\"itemName\":\"...\",\"categoryName\":\"...\",\"quantity\":1,\"unitCost\":1,\"totalCost\":1,\"confidence\":0.9}]}. Identify itemName, categoryName if visible or obvious, quantity, unitCost, totalCost, and confidence. Use empty string or 0 when missing. Do not invent values.",
     },
   ];
 
@@ -187,6 +187,7 @@ function parseSupplyText(text) {
       const unitCost = Number(match[3]);
       return {
         itemName: match[1].trim(),
+        categoryName: "",
         quantity,
         unitCost,
         totalCost: quantity * unitCost,
@@ -201,6 +202,7 @@ function normalizeItems(items) {
     .filter((item) => item.itemName)
     .map((item) => ({
       itemName: String(item.itemName || "").trim(),
+      categoryName: String(item.categoryName || item.suggestedCategory || "").trim(),
       quantity: Number(item.quantity || 0),
       unitCost: Number(item.unitCost || 0),
       totalCost: Number(item.totalCost || Number(item.quantity || 0) * Number(item.unitCost || 0)),

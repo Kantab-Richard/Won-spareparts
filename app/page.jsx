@@ -8,6 +8,7 @@ import {
   ClipboardList,
   History,
   Pencil,
+  Printer,
   LogOut,
   LayoutDashboard,
   Menu,
@@ -26,7 +27,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { addBasketSale, addCategory, addExpense, addItem, addSale, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSupplier } from "../lib/api";
+import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSalesRep, updateSupplier } from "../lib/api";
 
 const today = new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" });
@@ -51,7 +52,7 @@ const tabs = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const emptyData = { categories: [], items: [], sales: [], stockIn: [], suppliers: [], movements: [], expenses: [] };
+const emptyData = { categories: [], items: [], sales: [], stockIn: [], suppliers: [], movements: [], salesReps: [], expenses: [] };
 const defaultUsers = [
   { username: "manager", password: "manager123", role: "manager", name: "Manager" },
   { username: "sales", password: "sales123", role: "sales", name: "Sales Representative" },
@@ -71,6 +72,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState({ mode: "today", start: today, end: today });
   const [saleCart, setSaleCart] = useState([]);
+  const [lastReceipt, setLastReceipt] = useState(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("wonspareparts-session");
@@ -96,6 +98,7 @@ export default function Home() {
         stockIn: nextData.stockIn || [],
         suppliers: nextData.suppliers || [],
         movements: nextData.movements || [],
+        salesReps: nextData.salesReps || [],
         expenses: nextData.expenses || [],
       });
       setStatus(nextData === data ? "Loaded" : "Records loaded");
@@ -149,6 +152,34 @@ export default function Home() {
     setSaleCart((current) => current.filter((entry) => entry.Item_ID !== itemId));
   }
 
+  async function submitSingleSale(payload, reset) {
+    setStatus("Saving sale...");
+    try {
+      const result = await addSale({
+        ...payload,
+        Sales_Rep_ID: session?.repId || "",
+        Sales_Rep_Name: session?.name || "",
+      });
+      reset?.();
+      const receiptNo = result.receiptNo || result.saleId || result.data?.sales?.slice(-1)?.[0]?.Receipt_No;
+      const nextData = result.data || (await fetchDatabase());
+      setData({
+        categories: nextData.categories || [],
+        items: nextData.items || [],
+        sales: nextData.sales || [],
+        stockIn: nextData.stockIn || [],
+        suppliers: nextData.suppliers || [],
+        movements: nextData.movements || [],
+        salesReps: nextData.salesReps || [],
+        expenses: nextData.expenses || [],
+      });
+      setLastReceipt(buildReceipt(receiptNo, nextData.sales || [], nextData.items || [], session?.name || ""));
+      setStatus("Sale saved successfully");
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
   async function submitBasketSale(date) {
     if (!saleCart.length) {
       setStatus("Sale cart is empty");
@@ -156,9 +187,25 @@ export default function Home() {
     }
     setStatus("Saving basket sale...");
     try {
-      await addBasketSale({ Date: date, Items: saleCart });
+      const result = await addBasketSale({
+        Date: date,
+        Items: saleCart,
+        Sales_Rep_ID: session?.repId || "",
+        Sales_Rep_Name: session?.name || "",
+      });
       setSaleCart([]);
-      await loadData();
+      const nextData = result.data || (await fetchDatabase());
+      setData({
+        categories: nextData.categories || [],
+        items: nextData.items || [],
+        sales: nextData.sales || [],
+        stockIn: nextData.stockIn || [],
+        suppliers: nextData.suppliers || [],
+        movements: nextData.movements || [],
+        salesReps: nextData.salesReps || [],
+        expenses: nextData.expenses || [],
+      });
+      setLastReceipt(buildReceipt(result.receiptNo, nextData.sales || [], nextData.items || [], session?.name || ""));
       setStatus("Basket sale saved successfully");
     } catch (error) {
       setStatus(error.message);
@@ -166,17 +213,31 @@ export default function Home() {
   }
 
   async function submitScannedStock(scan) {
-    const rows = scan.rows.filter((row) => row.Item_ID && Number(row.quantity || 0) > 0);
+    const rows = scan.rows.filter((row) => Number(row.quantity || 0) > 0 && (row.Item_ID || (row.createNew && row.Category_ID)));
     if (!rows.length) {
-      setStatus("No matched supply rows to save");
+      setStatus("No reviewed supply rows to save");
       return;
     }
     setStatus("Saving scanned supply items...");
     try {
       for (const row of rows) {
+        let itemId = row.Item_ID;
+        if (!itemId && row.createNew) {
+          const created = await addItem({
+            Item_Name: row.itemName,
+            Category_ID: row.Category_ID,
+            Cost_Price: row.unitCost,
+            Selling_Price: row.sellingPrice || row.unitCost,
+            Current_Stock: 0,
+            Status: "Active",
+          });
+          const createdItems = created.data?.items || [];
+          itemId = [...createdItems].reverse().find((item) => normalizeName(item.Item_Name) === normalizeName(row.itemName))?.Item_ID;
+          if (!itemId) throw new Error(`Could not create ${row.itemName}`);
+        }
         await addStock({
           Date: scan.Date,
-          Item_ID: row.Item_ID,
+          Item_ID: itemId,
           Qty_Added: row.quantity,
           Unit_Cost: row.unitCost,
           Supplier_ID: scan.Supplier_ID,
@@ -203,8 +264,26 @@ export default function Home() {
     }
   }
 
-  function login(credentials) {
-    const nextSession = users.find(
+  async function login(credentials) {
+    let sheetData = null;
+    try {
+      sheetData = await fetchDatabase();
+      setData({
+        categories: sheetData.categories || [],
+        items: sheetData.items || [],
+        sales: sheetData.sales || [],
+        stockIn: sheetData.stockIn || [],
+        suppliers: sheetData.suppliers || [],
+        movements: sheetData.movements || [],
+        salesReps: sheetData.salesReps || [],
+        expenses: sheetData.expenses || [],
+      });
+    } catch {
+      sheetData = null;
+    }
+
+    const loginUsers = buildLoginUsers(users, sheetData?.salesReps || []);
+    const nextSession = loginUsers.find(
       (user) =>
         user.username.toLowerCase() === credentials.username.trim().toLowerCase() &&
         user.password === credentials.password
@@ -214,7 +293,7 @@ export default function Home() {
       throw new Error("Login failed. Check the username and password.");
     }
 
-    const safeSession = { role: nextSession.role, name: nextSession.name, username: nextSession.username };
+    const safeSession = { role: nextSession.role, name: nextSession.name, username: nextSession.username, repId: nextSession.repId || "" };
     window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
     setSession(safeSession);
     setActiveTab("dashboard");
@@ -225,6 +304,32 @@ export default function Home() {
     window.localStorage.setItem("wonspareparts-users", JSON.stringify(nextUsers));
     setUsers(nextUsers);
     setStatus("Login credentials updated");
+  }
+
+  async function submitSalesRep(action, payload, reset) {
+    setStatus("Saving sales representative...");
+    try {
+      const result = await action(payload);
+      reset?.();
+      const nextData = result.data || (await fetchDatabase());
+      setData({
+        categories: nextData.categories || [],
+        items: nextData.items || [],
+        sales: nextData.sales || [],
+        stockIn: nextData.stockIn || [],
+        suppliers: nextData.suppliers || [],
+        movements: nextData.movements || [],
+        salesReps: nextData.salesReps || [],
+        expenses: nextData.expenses || [],
+      });
+      const uniqueUsers = buildLoginUsers(users, nextData.salesReps || []);
+      window.localStorage.setItem("wonspareparts-users", JSON.stringify(uniqueUsers));
+      setUsers(uniqueUsers);
+      setStatus("Sales representative saved");
+    } catch (error) {
+      setStatus(error.message);
+      throw error;
+    }
   }
 
   function logout() {
@@ -324,17 +429,20 @@ export default function Home() {
           <SalesForm
             items={activeItems}
             cart={saleCart}
-            onSubmit={(payload, reset) => submit(addSale, payload, reset)}
+            receipt={lastReceipt}
+            onSubmit={submitSingleSale}
             onCartQty={updateCartQty}
             onRemoveCartItem={removeCartItem}
             onCheckout={submitBasketSale}
             onClearCart={() => setSaleCart([])}
+            onClearReceipt={() => setLastReceipt(null)}
           />
         )}
         {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
         {activeTab === "aiSupply" && session.role === "manager" && (
           <AiSupplyScanPanel
             items={activeItems}
+            categories={data.categories}
             suppliers={data.suppliers}
             onAnalyze={analyzeSupplyScan}
             onSaveRows={submitScannedStock}
@@ -374,7 +482,14 @@ export default function Home() {
           />
         )}
         {activeTab === "settings" && session.role === "manager" && (
-          <SettingsPanel users={users} onSave={updateCredentials} onCheckConnection={checkConnection} />
+          <SettingsPanel
+            users={users}
+            salesReps={data.salesReps}
+            onSave={updateCredentials}
+            onAddSalesRep={(payload, reset) => submitSalesRep(addSalesRep, payload, reset)}
+            onUpdateSalesRep={(payload) => submitSalesRep(updateSalesRep, payload)}
+            onCheckConnection={checkConnection}
+          />
         )}
       </section>
     </main>
@@ -384,14 +499,18 @@ export default function Home() {
 function LoginScreen({ onLogin }) {
   const [form, setForm] = useForm({ username: "", password: "" });
   const [error, setError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  function submitLogin(event) {
+  async function submitLogin(event) {
     event.preventDefault();
     setError("");
+    setLoggingIn(true);
     try {
-      onLogin(form);
+      await onLogin(form);
     } catch (loginError) {
       setError(loginError.message);
+    } finally {
+      setLoggingIn(false);
     }
   }
 
@@ -409,9 +528,9 @@ function LoginScreen({ onLogin }) {
           <Field label="Username" value={form.username} onChange={(username) => setForm({ username })} />
           <Field label="Password" type="password" value={form.password} onChange={(password) => setForm({ password })} />
           {error && <p className="form-error">{error}</p>}
-          <button className="primary-button" type="submit">
+          <button className="primary-button" type="submit" disabled={loggingIn}>
             <UserRound size={18} />
-            <span>Log In</span>
+            <span>{loggingIn ? "Checking..." : "Log In"}</span>
           </button>
         </form>
       </section>
@@ -519,7 +638,7 @@ function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilte
   );
 }
 
-function SalesForm({ items, cart, onSubmit, onCartQty, onRemoveCartItem, onCheckout, onClearCart }) {
+function SalesForm({ items, cart, receipt, onSubmit, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
   const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Sold: 1 });
   const [cartDate, setCartDate] = useState(today);
   const selected = items.find((item) => item.Item_ID === form.Item_ID);
@@ -596,18 +715,66 @@ function SalesForm({ items, cart, onSubmit, onCartQty, onRemoveCartItem, onCheck
           <EmptyState title="Cart is empty" message="Use Add to Cart from the item list to build a basket sale." />
         )}
       </section>
+      {receipt && (
+        <ReceiptPanel receipt={receipt} onClose={onClearReceipt} />
+      )}
     </div>
   );
 }
 
-function AiSupplyScanPanel({ items, suppliers, onAnalyze, onSaveRows }) {
+function ReceiptPanel({ receipt, onClose }) {
+  return (
+    <section className="panel receipt-print-panel">
+      <div className="panel-heading no-print">
+        <div>
+          <h2>Receipt Ready</h2>
+          <span>{receipt.receiptNo}</span>
+        </div>
+        <button className="primary-button compact-button" type="button" onClick={() => window.print()}>
+          <Printer size={16} />
+          <span>Print</span>
+        </button>
+      </div>
+      <div className="receipt-paper">
+        <h2>WONSPAREPARTS</h2>
+        <p>Premium Auto & Industrial Parts</p>
+        <strong>Welcome to WONSPAREPARTS</strong>
+        <div className="receipt-meta">
+          <span>Receipt No: {receipt.receiptNo}</span>
+          <span>Date: {receipt.date}</span>
+          <span>Sales Rep: {receipt.salesRep || "Sales Representative"}</span>
+        </div>
+        <div className="receipt-lines">
+          {receipt.items.map((item) => (
+            <div className="receipt-line" key={`${receipt.receiptNo}-${item.itemId}`}>
+              <span>{item.name}</span>
+              <span>{item.qty} x {money.format(item.unitPrice)}</span>
+              <strong>{money.format(item.total)}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="receipt-grand-total">
+          <span>Total</span>
+          <strong>{money.format(receipt.total)}</strong>
+        </div>
+        <p className="receipt-thanks">Thank you for buying from WONSPAREPARTS. Please come again.</p>
+      </div>
+      <button className="secondary-button compact-button no-print" type="button" onClick={onClose}>
+        <span>Close Receipt</span>
+      </button>
+    </section>
+  );
+}
+
+function AiSupplyScanPanel({ items, categories, suppliers, onAnalyze, onSaveRows }) {
   const [form, setForm] = useForm({ Date: today, Supplier_ID: "", Invoice_No: "", text: "", imageDataUrl: "", imageName: "" });
   const [rows, setRows] = useState([]);
   const [message, setMessage] = useState("");
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const activeSuppliers = suppliers.filter((supplier) => (supplier.Status || "Active") === "Active");
-  const matchedRows = rows.filter((row) => row.Item_ID && Number(row.quantity || 0) > 0);
+  const activeCategories = categories.filter((category) => (category.Status || "Active") === "Active");
+  const matchedRows = rows.filter((row) => Number(row.quantity || 0) > 0 && (row.Item_ID || (row.createNew && row.Category_ID)));
   const totalCost = matchedRows.reduce((sum, row) => sum + Number(row.quantity || 0) * Number(row.unitCost || 0), 0);
 
   function readImage(event) {
@@ -638,7 +805,12 @@ function AiSupplyScanPanel({ items, suppliers, onAnalyze, onSaveRows }) {
       const nextRows = (result.items || []).map((row) => ({
         ...row,
         Item_ID: guessItemId(row.itemName, items),
+        Category_ID: guessCategoryId(row.categoryName || row.suggestedCategory || "", categories),
+        sellingPrice: Number(row.totalCost || 0) && Number(row.quantity || 0) ? Number(row.totalCost || 0) / Number(row.quantity || 1) : Number(row.unitCost || 0),
       }));
+      nextRows.forEach((row) => {
+        row.createNew = !row.Item_ID;
+      });
       setRows(nextRows);
       if (result.transcript) {
         setForm({ text: result.transcript });
@@ -726,7 +898,30 @@ function AiSupplyScanPanel({ items, suppliers, onAnalyze, onSaveRows }) {
                     <strong>{row.itemName}</strong>
                     <span>{Math.round(Number(row.confidence || 0) * 100)}% confidence</span>
                   </div>
-                  <Select label="Match Item" value={row.Item_ID || ""} onChange={(Item_ID) => updateRow(index, { Item_ID })} options={items} />
+                  <label className="field">
+                    <span>Match Item</span>
+                    <select
+                      value={row.createNew ? "__new__" : row.Item_ID || ""}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        updateRow(index, { createNew: value === "__new__", Item_ID: value === "__new__" ? "" : value });
+                      }}
+                    >
+                      <option value="">Needs review</option>
+                      <option value="__new__">Create new item</option>
+                      {items.map((item) => (
+                        <option key={item.Item_ID} value={item.Item_ID}>
+                          {item.Item_Name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {row.createNew && (
+                    <>
+                      <Select label="Category" value={row.Category_ID || ""} onChange={(Category_ID) => updateRow(index, { Category_ID })} options={activeCategories} category />
+                      <Field label="Selling Price" type="number" value={row.sellingPrice || 0} onChange={(sellingPrice) => updateRow(index, { sellingPrice })} />
+                    </>
+                  )}
                   <Field label="Qty" type="number" value={row.quantity || 0} onChange={(quantity) => updateRow(index, { quantity })} />
                   <Field label="Unit Cost" type="number" value={row.unitCost || 0} onChange={(unitCost) => updateRow(index, { unitCost })} />
                   <strong>{money.format(Number(row.quantity || 0) * Number(row.unitCost || 0))}</strong>
@@ -902,6 +1097,7 @@ function SalesHistoryPanel({ sales, items }) {
         groups[receipt] = {
           receipt,
           date: sale.Date,
+          salesRep: sale.Sales_Rep_Name || "",
           items: 0,
           quantity: 0,
           total: 0,
@@ -949,11 +1145,15 @@ function SalesHistoryPanel({ sales, items }) {
               <article className="receipt-card" key={group.receipt}>
                 <div>
                   <strong>{group.receipt}</strong>
-                  <span>{group.date}</span>
+                  <span>{group.date}{group.salesRep ? ` - ${group.salesRep}` : ""}</span>
                 </div>
                 <span>{group.items} lines</span>
                 <span>{group.quantity} qty</span>
                 <strong>{money.format(group.total)}</strong>
+                <button className="secondary-button compact-button" type="button" onClick={() => printReceipt(buildReceipt(group.receipt, sales, items, group.salesRep))}>
+                  <Printer size={15} />
+                  <span>Reprint</span>
+                </button>
               </article>
             ))}
           </div>
@@ -967,13 +1167,14 @@ function SalesHistoryPanel({ sales, items }) {
           <span>{money.format(totalRevenue)}</span>
         </div>
         <Table
-          columns={["Date", "Receipt", "Item", "Qty", "Unit", "Total"]}
+          columns={["Date", "Receipt", "Rep", "Item", "Qty", "Unit", "Total"]}
           rows={filteredSales
             .slice()
             .reverse()
             .map((sale) => [
               sale.Date,
               sale.Receipt_No || sale.Sale_ID,
+              sale.Sales_Rep_Name || "-",
               itemNames[sale.Item_ID] || sale.Item_ID,
               sale.Qty_Sold,
               money.format(Number(sale.Unit_Selling_Price || 0)),
@@ -1332,15 +1533,15 @@ function CategoriesPanel({ categories, onSubmit, onUpdate }) {
   );
 }
 
-function SettingsPanel({ users, onSave, onCheckConnection }) {
+function SettingsPanel({ users, salesReps, onSave, onAddSalesRep, onUpdateSalesRep, onCheckConnection }) {
   const [form, setForm] = useState(() => ({
     managerName: users.find((user) => user.role === "manager")?.name || "Manager",
     managerUsername: users.find((user) => user.role === "manager")?.username || "",
     managerPassword: users.find((user) => user.role === "manager")?.password || "",
-    salesName: users.find((user) => user.role === "sales")?.name || "Sales Representative",
-    salesUsername: users.find((user) => user.role === "sales")?.username || "",
-    salesPassword: users.find((user) => user.role === "sales")?.password || "",
   }));
+  const [repForm, setRepForm] = useForm({ Rep_Name: "", Username: "", Password: "", Phone: "", Status: "Active" });
+  const [editingRepId, setEditingRepId] = useState("");
+  const [editRepForm, setEditRepForm] = useForm({ Rep_ID: "", Rep_Name: "", Username: "", Password: "", Phone: "", Status: "Active" });
   const [message, setMessage] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
   const [checkingConnection, setCheckingConnection] = useState(false);
@@ -1355,18 +1556,10 @@ function SettingsPanel({ users, onSave, onCheckConnection }) {
       form.managerName,
       form.managerUsername,
       form.managerPassword,
-      form.salesName,
-      form.salesUsername,
-      form.salesPassword,
     ];
 
     if (required.some((value) => !String(value).trim())) {
       setMessage("All login fields are required.");
-      return;
-    }
-
-    if (form.managerUsername.trim().toLowerCase() === form.salesUsername.trim().toLowerCase()) {
-      setMessage("Manager and sales usernames must be different.");
       return;
     }
 
@@ -1377,14 +1570,54 @@ function SettingsPanel({ users, onSave, onCheckConnection }) {
         username: form.managerUsername.trim(),
         password: form.managerPassword,
       },
-      {
-        role: "sales",
-        name: form.salesName.trim(),
-        username: form.salesUsername.trim(),
-        password: form.salesPassword,
-      },
+      ...salesReps.filter((rep) => (rep.Status || "Active") === "Active").map(salesRepToUser),
     ]);
-    setMessage("Credentials saved successfully.");
+    setMessage("Manager login saved successfully.");
+  }
+
+  async function addRep(event) {
+    event.preventDefault();
+    if (!repForm.Rep_Name || !repForm.Username || !repForm.Password) {
+      setMessage("Sales rep name, username, and password are required.");
+      return;
+    }
+    if (repForm.Username.trim().toLowerCase() === form.managerUsername.trim().toLowerCase()) {
+      setMessage("Sales rep username cannot be the same as manager username.");
+      return;
+    }
+    try {
+      await onAddSalesRep(repForm, () => setRepForm({ Rep_Name: "", Username: "", Password: "", Phone: "", Status: "Active" }));
+      setMessage("Sales representative saved.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  function beginRepEdit(rep) {
+    setEditingRepId(rep.Rep_ID);
+    setEditRepForm({
+      Rep_ID: rep.Rep_ID,
+      Rep_Name: rep.Rep_Name,
+      Username: rep.Username,
+      Password: rep.Password,
+      Phone: rep.Phone || "",
+      Status: rep.Status || "Active",
+    });
+  }
+
+  async function saveRepEdit(event) {
+    event.preventDefault();
+    if (editRepForm.Username.trim().toLowerCase() === form.managerUsername.trim().toLowerCase()) {
+      setMessage("Sales rep username cannot be the same as manager username.");
+      return;
+    }
+    try {
+      await onUpdateSalesRep(editRepForm);
+      setEditingRepId("");
+      setMessage("Sales representative updated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function testConnection() {
@@ -1401,7 +1634,7 @@ function SettingsPanel({ users, onSave, onCheckConnection }) {
   }
 
   return (
-    <form className="settings-grid" onSubmit={saveSettings}>
+    <div className="settings-grid">
       <section className="panel settings-actions connection-card">
         <div>
           <h2>Google Sheets Connection</h2>
@@ -1414,7 +1647,7 @@ function SettingsPanel({ users, onSave, onCheckConnection }) {
         </button>
       </section>
 
-      <section className="panel settings-card">
+      <form className="panel settings-card" onSubmit={saveSettings}>
         <div className="panel-heading">
           <div>
             <h2>Manager Login</h2>
@@ -1425,33 +1658,81 @@ function SettingsPanel({ users, onSave, onCheckConnection }) {
         <Field label="Display Name" value={form.managerName} onChange={(managerName) => update("managerName", managerName)} />
         <Field label="Username" value={form.managerUsername} onChange={(managerUsername) => update("managerUsername", managerUsername)} />
         <Field label="Password" type="password" value={form.managerPassword} onChange={(managerPassword) => update("managerPassword", managerPassword)} />
-      </section>
+        <button className="primary-button" type="submit">
+          <Settings size={18} />
+          <span>Save Manager Login</span>
+        </button>
+        {message && <p className="scan-message">{message}</p>}
+      </form>
 
-      <section className="panel settings-card">
+      <form className="panel settings-card" onSubmit={addRep}>
         <div className="panel-heading">
           <div>
-            <h2>Sales Login</h2>
-            <span>Limited access for recording sales and viewing items.</span>
+            <h2>Add Sales Rep</h2>
+            <span>Each sales representative gets unique login details.</span>
           </div>
           <UserRound size={20} />
         </div>
-        <Field label="Display Name" value={form.salesName} onChange={(salesName) => update("salesName", salesName)} />
-        <Field label="Username" value={form.salesUsername} onChange={(salesUsername) => update("salesUsername", salesUsername)} />
-        <Field label="Password" type="password" value={form.salesPassword} onChange={(salesPassword) => update("salesPassword", salesPassword)} />
-      </section>
-
-      <section className="panel settings-actions">
-        <div>
-          <h2>Save Login Credentials</h2>
-          <p>Updated credentials are saved on this browser. For hosted multi-user security, connect server-side authentication later.</p>
-          {message && <span>{message}</span>}
-        </div>
+        <Field label="Full Name" value={repForm.Rep_Name} onChange={(Rep_Name) => setRepForm({ Rep_Name })} />
+        <Field label="Username" value={repForm.Username} onChange={(Username) => setRepForm({ Username })} />
+        <Field label="Password" type="password" value={repForm.Password} onChange={(Password) => setRepForm({ Password })} />
+        <Field label="Phone" value={repForm.Phone} onChange={(Phone) => setRepForm({ Phone })} />
+        <StatusSelect label="Status" value={repForm.Status} onChange={(Status) => setRepForm({ Status })} />
         <button className="primary-button" type="submit">
-          <Settings size={18} />
-          <span>Save Settings</span>
+          <Plus size={18} />
+          <span>Add Sales Rep</span>
         </button>
+      </form>
+
+      <section className="panel sales-rep-list-card">
+        <div className="panel-heading">
+          <div>
+            <h2>Sales Representatives</h2>
+            <span>{salesReps.length} users</span>
+          </div>
+          <UserRound size={20} />
+        </div>
+        {salesReps.length ? (
+          <div className="sales-rep-list">
+            {salesReps.map((rep) => (
+              <article className="sales-rep-card" key={rep.Rep_ID}>
+                {editingRepId === rep.Rep_ID ? (
+                  <form className="rep-edit-form" onSubmit={saveRepEdit}>
+                    <Field label="Full Name" value={editRepForm.Rep_Name} onChange={(Rep_Name) => setEditRepForm({ Rep_Name })} />
+                    <Field label="Username" value={editRepForm.Username} onChange={(Username) => setEditRepForm({ Username })} />
+                    <Field label="Password" type="password" value={editRepForm.Password} onChange={(Password) => setEditRepForm({ Password })} />
+                    <Field label="Phone" value={editRepForm.Phone} onChange={(Phone) => setEditRepForm({ Phone })} />
+                    <StatusSelect label="Status" value={editRepForm.Status} onChange={(Status) => setEditRepForm({ Status })} />
+                    <div className="edit-actions">
+                      <button className="primary-button compact-button" type="submit">
+                        <span>Save</span>
+                      </button>
+                      <button className="secondary-button compact-button" type="button" onClick={() => setEditingRepId("")}>
+                        <span>Cancel</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div>
+                      <strong>{rep.Rep_Name}</strong>
+                      <span>{rep.Username} {rep.Phone ? `- ${rep.Phone}` : ""}</span>
+                    </div>
+                    <StatusBadge status={rep.Status || "Active"} />
+                    <button className="secondary-button compact-button" type="button" onClick={() => beginRepEdit(rep)}>
+                      <Pencil size={15} />
+                      <span>Edit</span>
+                    </button>
+                  </>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No sales reps yet" message="Add the first sales representative to give them their own login." />
+        )}
       </section>
-    </form>
+    </div>
   );
 }
 
@@ -1687,6 +1968,102 @@ function formatDateRange(range) {
   return range.start === range.end ? range.start : `${range.start} to ${range.end}`;
 }
 
+function buildLoginUsers(localUsers, salesReps) {
+  const managerUsers = localUsers.filter((user) => user.role === "manager");
+  const sheetUsers = salesReps
+    .filter((rep) => (rep.Status || "Active") === "Active")
+    .map(salesRepToUser);
+  return mergeUsers(managerUsers, sheetUsers);
+}
+
+function salesRepToUser(rep) {
+  return {
+    role: "sales",
+    repId: rep.Rep_ID || rep.repId || "",
+    name: rep.Rep_Name || rep.name || "Sales Representative",
+    username: rep.Username || rep.username || "",
+    password: rep.Password || rep.password || "",
+  };
+}
+
+function mergeUsers(...groups) {
+  const merged = [];
+  groups.flat().forEach((user) => {
+    if (!user?.username) return;
+    const key = user.username.toLowerCase();
+    const existingIndex = merged.findIndex((entry) => entry.username.toLowerCase() === key);
+    if (existingIndex >= 0) {
+      merged[existingIndex] = user;
+    } else {
+      merged.push(user);
+    }
+  });
+  return merged;
+}
+
+function buildReceipt(receiptNo, sales, items, fallbackRep) {
+  const itemMap = Object.fromEntries(items.map((item) => [item.Item_ID, item]));
+  const rows = sales.filter((sale) => (sale.Receipt_No || sale.Sale_ID) === receiptNo);
+  const first = rows[0] || {};
+  return {
+    receiptNo: receiptNo || first.Receipt_No || first.Sale_ID || "Receipt",
+    date: first.Date || today,
+    salesRep: first.Sales_Rep_Name || fallbackRep || "",
+    items: rows.map((sale) => ({
+      itemId: sale.Item_ID,
+      name: itemMap[sale.Item_ID]?.Item_Name || sale.Item_ID,
+      qty: Number(sale.Qty_Sold || 0),
+      unitPrice: Number(sale.Unit_Selling_Price || 0),
+      total: Number(sale.Total_Revenue || 0),
+    })),
+    total: rows.reduce((sum, sale) => sum + Number(sale.Total_Revenue || 0), 0),
+  };
+}
+
+function printReceipt(receipt) {
+  const html = `
+    <html>
+      <head>
+        <title>${receipt.receiptNo}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 18px; color: #111827; }
+          .paper { max-width: 320px; margin: 0 auto; }
+          h1 { font-size: 22px; margin: 0; text-align: center; font-weight: 800; }
+          p { margin: 4px 0; text-align: center; }
+          .welcome, .thanks { margin: 14px 0; font-weight: 700; }
+          .meta { border-top: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; padding: 8px 0; margin: 10px 0; font-size: 12px; }
+          .meta span, .line { display: flex; justify-content: space-between; gap: 8px; margin: 5px 0; }
+          .line span:first-child { flex: 1; }
+          .total { display: flex; justify-content: space-between; border-top: 2px solid #111827; margin-top: 10px; padding-top: 8px; font-size: 16px; font-weight: 800; }
+        </style>
+      </head>
+      <body>
+        <div class="paper">
+          <h1>WONSPAREPARTS</h1>
+          <p>Premium Auto & Industrial Parts</p>
+          <p class="welcome">Welcome to WONSPAREPARTS</p>
+          <div class="meta">
+            <span><b>Receipt No:</b> ${receipt.receiptNo}</span>
+            <span><b>Date:</b> ${receipt.date}</span>
+            <span><b>Sales Rep:</b> ${receipt.salesRep || "Sales Representative"}</span>
+          </div>
+          ${receipt.items
+            .map(
+              (item) => `<div class="line"><span>${item.name}</span><span>${item.qty} x ${money.format(item.unitPrice)}</span><b>${money.format(item.total)}</b></div>`
+            )
+            .join("")}
+          <div class="total"><span>Total</span><span>${money.format(receipt.total)}</span></div>
+          <p class="thanks">Thank you for buying from WONSPAREPARTS. Please come again.</p>
+        </div>
+        <script>window.print(); window.onafterprint = () => window.close();</script>
+      </body>
+    </html>`;
+  const printWindow = window.open("", "_blank", "width=420,height=640");
+  if (!printWindow) return;
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
 function guessItemId(name, items) {
   const scanName = normalizeName(name);
   if (!scanName) return "";
@@ -1697,6 +2074,18 @@ function guessItemId(name, items) {
     return itemName.includes(scanName) || scanName.includes(itemName);
   });
   return partial?.Item_ID || "";
+}
+
+function guessCategoryId(name, categories) {
+  const scanName = normalizeName(name);
+  if (!scanName) return "";
+  const exact = categories.find((category) => normalizeName(category.Category_Name) === scanName);
+  if (exact) return exact.Category_ID;
+  const partial = categories.find((category) => {
+    const categoryName = normalizeName(category.Category_Name);
+    return categoryName.includes(scanName) || scanName.includes(categoryName);
+  });
+  return partial?.Category_ID || "";
 }
 
 function normalizeName(value) {
