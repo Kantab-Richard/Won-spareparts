@@ -8,6 +8,7 @@ A Vercel-ready sales management system for WONSPAREPARTS using Google Sheets as 
 - Sales recorder that deducts item stock automatically
 - Stock-in form that increases item stock automatically
 - AI Supply Scan for reading supplier sheets or pasted supply text into stock-in rows
+- AI fallback support for OpenAI, Gemini, OpenRouter, DeepSeek, and simple text parsing
 - Item and category management
 - Expense logger
 - Manager-only settings for updating manager and sales login details
@@ -26,8 +27,17 @@ A Vercel-ready sales management system for WONSPAREPARTS using Google Sheets as 
    ```bash
    APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
    APPS_SCRIPT_TOKEN=change-this-secret-token
-   OPENAI_API_KEY=sk-mnop5678mnop5678mnop5678mnop5678mnop5678
+   AI_PROVIDER_ORDER=openai,gemini,openrouter,deepseek
+   OPENAI_API_KEY=
    OPENAI_MODEL=gpt-4o-mini
+   GEMINI_API_KEY=
+   GEMINI_MODEL=gemini-2.5-flash-lite
+   OPENROUTER_API_KEY=
+   OPENROUTER_MODEL=google/gemini-2.5-flash-lite
+   OPENROUTER_FALLBACK_MODELS=
+   DEEPSEEK_API_KEY=
+   DEEPSEEK_MODEL=deepseek-chat
+   NEXT_PUBLIC_APP_URL=https://won-spareparts.vercel.app
    ```
 
 3. Start the app:
@@ -37,6 +47,30 @@ A Vercel-ready sales management system for WONSPAREPARTS using Google Sheets as 
    ```
 
 Without an Apps Script URL, the app runs in demo mode with sample records.
+
+## AI Supply Scan Setup
+
+The app can try more than one AI provider. Add any keys you have in Vercel, then set `AI_PROVIDER_ORDER` to the order you want.
+
+Recommended free-friendly order:
+
+```bash
+AI_PROVIDER_ORDER=gemini,openrouter,deepseek,openai
+```
+
+Provider notes:
+
+- `GEMINI_API_KEY`: good first choice for free or low-cost image and text scanning.
+- `OPENROUTER_API_KEY`: useful because OpenRouter can route to many models. You can set `OPENROUTER_FALLBACK_MODELS` as a comma list, for example `google/gemini-2.5-flash-lite,openai/gpt-4o-mini`.
+- `DEEPSEEK_API_KEY`: useful for pasted text extraction. It is skipped for image-only scans because DeepSeek text models do not read images.
+- `OPENAI_API_KEY`: still supported and works well for image scans.
+
+If all AI providers fail, pasted text can still be checked with the simple parser using rows like:
+
+```text
+Brake Pad, 12, 35
+Spark Plug, 10, 12
+```
 
 ## Google Sheet Setup
 
@@ -71,8 +105,17 @@ Without an Apps Script URL, the app runs in demo mode with sample records.
    ```bash
    APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
    APPS_SCRIPT_TOKEN=change-this-secret-token
-   OPENAI_API_KEY=sk-your-openai-api-key
+   AI_PROVIDER_ORDER=openai,gemini,openrouter,deepseek
+   OPENAI_API_KEY=
    OPENAI_MODEL=gpt-4o-mini
+   GEMINI_API_KEY=
+   GEMINI_MODEL=gemini-2.5-flash-lite
+   OPENROUTER_API_KEY=
+   OPENROUTER_MODEL=google/gemini-2.5-flash-lite
+   OPENROUTER_FALLBACK_MODELS=
+   DEEPSEEK_API_KEY=
+   DEEPSEEK_MODEL=deepseek-chat
+   NEXT_PUBLIC_APP_URL=https://won-spareparts.vercel.app
    ```
 
 7. Click **Deploy**.
