@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Menu, RefreshCw, Search, ShieldCheck, UserRound, X } from "lucide-react";
 import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSalesRep, updateSupplier } from "../lib/api";
+import { HeaderBar } from "../components/HeaderBar";
+import { Sidebar } from "../components/Sidebar";
 import { Dashboard } from "../components/Dashboard";
 import { LoginScreen } from "../components/LoginScreen";
 import { SalesForm } from "../components/SalesForm";
@@ -304,71 +304,24 @@ export default function Home() {
 
   return (
     <main className="app-shell">
-      {sidebarOpen && <button className="sidebar-backdrop" type="button" onClick={() => setSidebarOpen(false)} />}
-      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
-        <div className="sidebar-header">
-          <div className="brand-mark">
-            <Image src="/wonspareparts-banner.png" alt="WONSPAREPARTS" width={2172} height={724} priority />
-          </div>
-          <button
-            className="mobile-menu-button"
-            type="button"
-            onClick={() => setSidebarOpen((open) => !open)}
-            title={sidebarOpen ? "Close navigation" : "Open navigation"}
-          >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-        <div className="user-card">
-          <div className="user-avatar">
-            {session.role === "manager" ? <ShieldCheck size={20} /> : <UserRound size={20} />}
-          </div>
-          <div>
-            <strong>{session.name}</strong>
-            <span>{session.role === "manager" ? "Manager Interface" : "Sales Representative Interface"}</span>
-          </div>
-        </div>
-        <nav className="tabs" aria-label="Main navigation">
-          {visibleTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                className={activeTab === tab.id ? "tab active" : "tab"}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setSidebarOpen(false);
-                }}
-                title={tab.label}
-              >
-                <Icon size={18} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="sync-box">
-          <span>{status}</span>
-          <button className="icon-button" onClick={loadData} title="Refresh records">
-            <RefreshCw size={17} />
-          </button>
-          <button className="icon-button" onClick={logout} title="Log out">
-            <LogOut size={17} />
-          </button>
-        </div>
-      </aside>
+      <Sidebar
+        activeTab={activeTab}
+        open={sidebarOpen}
+        session={session}
+        status={status}
+        tabs={visibleTabs}
+        onClose={() => setSidebarOpen(false)}
+        onLogout={logout}
+        onRefresh={loadData}
+        onSelectTab={(tabId) => {
+          setActiveTab(tabId);
+          setSidebarOpen(false);
+        }}
+        onToggle={() => setSidebarOpen((open) => !open)}
+      />
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Sales & Inventory</p>
-            <h1>WONSPAREPARTS Manager</h1>
-          </div>
-          <div className="search">
-            <Search size={18} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search items" />
-          </div>
-        </header>
+        <HeaderBar query={query} onQueryChange={setQuery} />
 
         {activeTab === "dashboard" && (
           <Dashboard
