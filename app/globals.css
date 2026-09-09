@@ -1504,6 +1504,8 @@ th {
   }
 
   .sidebar .tabs {
+    max-height: calc(100vh - 330px);
+    overflow-y: auto;
     top: 218px;
   }
 
@@ -1525,9 +1527,8 @@ th {
 
   .sidebar.open .tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     margin: 0;
-    overflow: visible;
     padding: 0;
   }
 
