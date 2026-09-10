@@ -2,7 +2,7 @@
 
 import { ClipboardList, PackagePlus, TriangleAlert } from "lucide-react";
 import { money, today } from "../lib/constants";
-import { DateFilterControl, EmptyState, Metric, StockBadge, Table } from "./ui";
+import { DateFilterControl, EmptyState, Metric, StatusBadge, StockBadge, Table } from "./ui";
 
 export function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilterChange, onNavigate }) {
   const isManager = role === "manager";

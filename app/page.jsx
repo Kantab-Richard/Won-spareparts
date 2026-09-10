@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSalesRep, updateSupplier } from "../lib/api";
 import { HeaderBar } from "../components/HeaderBar";
 import { Sidebar } from "../components/Sidebar";
@@ -42,9 +42,9 @@ export default function Home() {
     }
   }, []);
 
-  const visibleTabs = roleTabs[session?.role] || [];
+  const visibleTabs = useMemo(() => roleTabs[session?.role] || [], [session?.role]);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setStatus("Refreshing records...");
     try {
       const nextData = await fetchDatabase();
@@ -58,17 +58,17 @@ export default function Home() {
         salesReps: nextData.salesReps || [],
         expenses: nextData.expenses || [],
       });
-      setStatus(nextData === data ? "Loaded" : "Records loaded");
+      setStatus("Records loaded");
     } catch (error) {
       setStatus(error.message);
     }
-  }
+  }, []);
 
   useEffect(() => {
     if (session) {
       loadData();
     }
-  }, [session]);
+  }, [session, loadData]);
 
   useEffect(() => {
     if (session && !visibleTabs.some((tab) => tab.id === activeTab)) {
