@@ -3,6 +3,17 @@ import { sampleData } from "../../../lib/sampleData";
 
 export const dynamic = "force-dynamic";
 
+const demoDefaultSettings = {
+  manager_name: "Manager",
+  manager_username: "manager",
+  manager_password: "manager123",
+};
+
+function sanitizeDemoData(data) {
+  const { manager_password, ...safeSettings } = { ...demoDefaultSettings, ...(data.settings || {}) };
+  return { ...data, settings: { ...safeSettings, manager_password: "" } };
+}
+
 export async function POST(request) {
   let body;
   try {
@@ -21,7 +32,25 @@ export async function POST(request) {
         message: "The app is in demo mode. Add APPS_SCRIPT_URL and APPS_SCRIPT_TOKEN in Vercel to save real records.",
       });
     }
-    return NextResponse.json({ ok: true, demo: true, data: sampleData });
+    if (body.action === "login") {
+      const username = String(body.payload?.username || "").trim().toLowerCase();
+      const password = String(body.payload?.password || "");
+      const settings = { ...demoDefaultSettings, ...(sampleData.settings || {}) };
+      if (username === String(settings.manager_username).toLowerCase() && password === settings.manager_password) {
+        return NextResponse.json({ ok: true, demo: true, session: { role: "manager", name: settings.manager_name, username }, data: sanitizeDemoData(sampleData) });
+      }
+      const rep = (sampleData.salesReps || []).find(
+        (item) => String(item.Username || "").trim().toLowerCase() === username && String(item.Password || "") === password && (item.Status || "Active") === "Active"
+      );
+      if (rep) {
+        return NextResponse.json({ ok: true, demo: true, session: { role: "sales", repId: rep.Rep_ID, name: rep.Rep_Name, username: rep.Username }, data: sanitizeDemoData(sampleData) });
+      }
+      return NextResponse.json({ ok: false, error: "Login failed. Check the username and password." }, { status: 400 });
+    }
+    if (body.action === "updateSettings") {
+      return NextResponse.json({ ok: true, demo: true, data: sanitizeDemoData({ ...sampleData, settings: { ...sampleData.settings, ...(body.payload || {}) } }) });
+    }
+    return NextResponse.json({ ok: true, demo: true, data: sanitizeDemoData(sampleData) });
   }
 
   try {

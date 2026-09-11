@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, updateCategory, updateItem, updateSalesRep, updateSupplier } from "../lib/api";
+import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, loginUser, updateCategory, updateItem, updateSalesRep, updateSettings, updateSupplier } from "../lib/api";
 import { HeaderBar } from "../components/HeaderBar";
 import { Sidebar } from "../components/Sidebar";
 import { Dashboard } from "../components/Dashboard";
@@ -17,7 +17,7 @@ import { ExpensesPanel } from "../components/ExpensesPanel";
 import { CategoriesPanel } from "../components/CategoriesPanel";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { buildLoginUsers, buildReceipt, buildViewModel, getDateRange, normalizeName } from "../lib/business";
-import { defaultUsers, emptyData, roleTabs, today } from "../lib/constants";
+import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, today } from "../lib/constants";
 
 export default function Home() {
   const [session, setSession] = useState(null);
@@ -38,17 +38,21 @@ export default function Home() {
     }
     const storedUsers = window.localStorage.getItem("wonspareparts-users");
     if (storedUsers) {
-      setUsers(JSON.parse(storedUsers));
+      window.localStorage.removeItem("wonspareparts-users");
     }
   }, []);
 
   const visibleTabs = useMemo(() => roleTabs[session?.role] || [], [session?.role]);
+  const visibleSections = useMemo(() => sidebarSections[session?.role] || [], [session?.role]);
+  const appSettings = useMemo(() => ({ ...defaultSettings, ...(data.settings || {}) }), [data.settings]);
+  const lowStockLimit = Number(appSettings.low_stock_limit || defaultSettings.low_stock_limit);
 
   const loadData = useCallback(async () => {
     setStatus("Refreshing records...");
     try {
       const nextData = await fetchDatabase();
       setData({
+        settings: { ...defaultSettings, ...(nextData.settings || {}) },
         categories: nextData.categories || [],
         items: nextData.items || [],
         sales: nextData.sales || [],
@@ -121,6 +125,7 @@ export default function Home() {
       const receiptNo = result.receiptNo || result.saleId || result.data?.sales?.slice(-1)?.[0]?.Receipt_No;
       const nextData = result.data || (await fetchDatabase());
       setData({
+        settings: { ...defaultSettings, ...(nextData.settings || {}) },
         categories: nextData.categories || [],
         items: nextData.items || [],
         sales: nextData.sales || [],
@@ -130,7 +135,7 @@ export default function Home() {
         salesReps: nextData.salesReps || [],
         expenses: nextData.expenses || [],
       });
-      setLastReceipt(buildReceipt(receiptNo, nextData.sales || [], nextData.items || [], session?.name || ""));
+      setLastReceipt(buildReceipt(receiptNo, nextData.sales || [], nextData.items || [], session?.name || "", appSettings));
       setStatus("Sale saved successfully");
     } catch (error) {
       setStatus(error.message);
@@ -153,6 +158,7 @@ export default function Home() {
       setSaleCart([]);
       const nextData = result.data || (await fetchDatabase());
       setData({
+        settings: { ...defaultSettings, ...(nextData.settings || {}) },
         categories: nextData.categories || [],
         items: nextData.items || [],
         sales: nextData.sales || [],
@@ -162,7 +168,7 @@ export default function Home() {
         salesReps: nextData.salesReps || [],
         expenses: nextData.expenses || [],
       });
-      setLastReceipt(buildReceipt(result.receiptNo, nextData.sales || [], nextData.items || [], session?.name || ""));
+      setLastReceipt(buildReceipt(result.receiptNo, nextData.sales || [], nextData.items || [], session?.name || "", appSettings));
       setStatus("Basket sale saved successfully");
     } catch (error) {
       setStatus(error.message);
@@ -222,10 +228,11 @@ export default function Home() {
   }
 
   async function login(credentials) {
-    let sheetData = null;
     try {
-      sheetData = await fetchDatabase();
+      const result = await loginUser(credentials);
+      const sheetData = result.data || {};
       setData({
+        settings: { ...defaultSettings, ...(sheetData.settings || {}) },
         categories: sheetData.categories || [],
         items: sheetData.items || [],
         sales: sheetData.sales || [],
@@ -235,32 +242,41 @@ export default function Home() {
         salesReps: sheetData.salesReps || [],
         expenses: sheetData.expenses || [],
       });
-    } catch {
-      sheetData = null;
+      const safeSession = result.session;
+      window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
+      setSession(safeSession);
+      setActiveTab("dashboard");
+      setSidebarOpen(false);
+      return;
+    } catch (error) {
+      throw new Error(error.message);
     }
-
-    const loginUsers = buildLoginUsers(users, sheetData?.salesReps || []);
-    const nextSession = loginUsers.find(
-      (user) =>
-        user.username.toLowerCase() === credentials.username.trim().toLowerCase() &&
-        user.password === credentials.password
-    );
-
-    if (!nextSession) {
-      throw new Error("Login failed. Check the username and password.");
-    }
-
-    const safeSession = { role: nextSession.role, name: nextSession.name, username: nextSession.username, repId: nextSession.repId || "" };
-    window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
-    setSession(safeSession);
-    setActiveTab("dashboard");
-    setSidebarOpen(false);
   }
 
-  function updateCredentials(nextUsers) {
-    window.localStorage.setItem("wonspareparts-users", JSON.stringify(nextUsers));
-    setUsers(nextUsers);
-    setStatus("Login credentials updated");
+  async function saveAppSettings(payload) {
+    setStatus("Saving settings...");
+    try {
+      const result = await updateSettings(payload);
+      const nextData = result.data || (await fetchDatabase());
+      setData({
+        settings: { ...defaultSettings, ...(nextData.settings || {}) },
+        categories: nextData.categories || [],
+        items: nextData.items || [],
+        sales: nextData.sales || [],
+        stockIn: nextData.stockIn || [],
+        suppliers: nextData.suppliers || [],
+        movements: nextData.movements || [],
+        salesReps: nextData.salesReps || [],
+        expenses: nextData.expenses || [],
+      });
+      const nextUsers = buildLoginUsers([{ role: "manager", name: payload.manager_name, username: payload.manager_username, password: "" }], nextData.salesReps || []);
+      window.localStorage.removeItem("wonspareparts-users");
+      setUsers(nextUsers);
+      setStatus("Settings saved");
+    } catch (error) {
+      setStatus(error.message);
+      throw error;
+    }
   }
 
   async function submitSalesRep(action, payload, reset) {
@@ -270,6 +286,7 @@ export default function Home() {
       reset?.();
       const nextData = result.data || (await fetchDatabase());
       setData({
+        settings: { ...defaultSettings, ...(nextData.settings || {}) },
         categories: nextData.categories || [],
         items: nextData.items || [],
         sales: nextData.sales || [],
@@ -280,7 +297,7 @@ export default function Home() {
         expenses: nextData.expenses || [],
       });
       const uniqueUsers = buildLoginUsers(users, nextData.salesReps || []);
-      window.localStorage.setItem("wonspareparts-users", JSON.stringify(uniqueUsers));
+      window.localStorage.removeItem("wonspareparts-users");
       setUsers(uniqueUsers);
       setStatus("Sales representative saved");
     } catch (error) {
@@ -309,7 +326,7 @@ export default function Home() {
         open={sidebarOpen}
         session={session}
         status={status}
-        tabs={visibleTabs}
+        sections={visibleSections}
         onClose={() => setSidebarOpen(false)}
         onLogout={logout}
         onRefresh={loadData}
@@ -333,6 +350,7 @@ export default function Home() {
             dateRange={dateRange}
             onDateFilterChange={setDateFilter}
             onNavigate={setActiveTab}
+            lowStockLimit={lowStockLimit}
           />
         )}
         {activeTab === "sales" && (
@@ -369,13 +387,14 @@ export default function Home() {
           <StockHistoryPanel movements={data.movements} items={data.items} />
         )}
         {activeTab === "salesHistory" && session.role === "manager" && (
-          <SalesHistoryPanel sales={data.sales} items={data.items} />
+          <SalesHistoryPanel sales={data.sales} items={data.items} receiptSettings={appSettings} />
         )}
         {activeTab === "items" && (
           <ItemsPanel
             items={session.role === "manager" ? filteredItems : filteredItems.filter((item) => (item.Status || "Active") === "Active")}
             categories={data.categories}
             role={session.role}
+            lowStockLimit={lowStockLimit}
             onSubmit={(payload, reset) => submit(addItem, payload, reset)}
             onUpdate={(payload) => submit(updateItem, payload)}
             onAddToCart={addToCart}
@@ -394,8 +413,9 @@ export default function Home() {
         {activeTab === "settings" && session.role === "manager" && (
           <SettingsPanel
             users={users}
+            settings={appSettings}
             salesReps={data.salesReps}
-            onSave={updateCredentials}
+            onSaveSettings={saveAppSettings}
             onAddSalesRep={(payload, reset) => submitSalesRep(addSalesRep, payload, reset)}
             onUpdateSalesRep={(payload) => submitSalesRep(updateSalesRep, payload)}
             onCheckConnection={checkConnection}

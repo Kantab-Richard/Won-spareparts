@@ -1,7 +1,7 @@
 "use client";
 
 import { Printer } from "lucide-react";
-import { money } from "../lib/constants";
+import { defaultSettings, money } from "../lib/constants";
 
 export function ReceiptPanel({ receipt, onClose }) {
   return (
@@ -17,9 +17,9 @@ export function ReceiptPanel({ receipt, onClose }) {
         </button>
       </div>
       <div className="receipt-paper">
-        <h2>WONSPAREPARTS</h2>
+        <h2>{receipt.shopName || defaultSettings.shop_name}</h2>
         <p>Premium Auto & Industrial Parts</p>
-        <strong>Welcome to WONSPAREPARTS</strong>
+        <strong>{receipt.welcomeNote || defaultSettings.welcome_note}</strong>
         <div className="receipt-meta">
           <span>Receipt No: {receipt.receiptNo}</span>
           <span>Date: {receipt.date}</span>
@@ -38,7 +38,7 @@ export function ReceiptPanel({ receipt, onClose }) {
           <span>Total</span>
           <strong>{money.format(receipt.total)}</strong>
         </div>
-        <p className="receipt-thanks">Thank you for buying from WONSPAREPARTS. Please come again.</p>
+        <p className="receipt-thanks">{receipt.thankYouNote || defaultSettings.thank_you_note}</p>
       </div>
       <button className="secondary-button compact-button no-print" type="button" onClick={onClose}>
         <span>Close Receipt</span>

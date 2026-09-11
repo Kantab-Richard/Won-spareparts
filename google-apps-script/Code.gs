@@ -36,6 +36,10 @@ const SHEETS = {
     headers: ['Rep_ID', 'Rep_Name', 'Username', 'Password', 'Phone', 'Status'],
     prefix: 'REP',
   },
+  settings: {
+    name: 'App_Settings',
+    headers: ['Setting_Key', 'Setting_Value'],
+  },
   expenses: {
     name: 'Expenses',
     headers: ['Expense_ID', 'Date', 'Description', 'Amount'],
@@ -54,6 +58,8 @@ function doPost(event) {
     const payload = body.payload || {};
 
     if (body.action === 'healthCheck') return jsonResponse({ ok: true, message: 'Google Sheets connection is working' });
+    if (body.action === 'login') return jsonResponse(login(payload));
+    if (body.action === 'updateSettings') return jsonResponse(updateSettings(payload));
     if (body.action === 'getDashboard') return jsonResponse({ ok: true, data: getDashboardData() });
     if (body.action === 'addCategory') return jsonResponse(addCategory(payload));
     if (body.action === 'updateCategory') return jsonResponse(updateCategory(payload));
@@ -87,6 +93,73 @@ function setupWorkbook() {
     sheet.appendRow(config.headers);
     sheet.setFrozenRows(1);
   });
+  seedDefaultSettings();
+}
+
+function login(payload) {
+  requireFields(payload, ['username', 'password']);
+  ensureHeaders();
+  const username = String(payload.username || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const settings = getSettings();
+
+  if (username === String(settings.manager_username || '').trim().toLowerCase() && password === String(settings.manager_password || '')) {
+    return {
+      ok: true,
+      session: {
+        role: 'manager',
+        name: settings.manager_name || 'Manager',
+        username: settings.manager_username || username,
+        repId: '',
+      },
+      data: getDashboardData(),
+    };
+  }
+
+  const rep = readObjects('salesReps').find((row) => {
+    return String(row.Username || '').trim().toLowerCase() === username &&
+      String(row.Password || '') === password &&
+      (row.Status || 'Active') === 'Active';
+  });
+
+  if (!rep) throw new Error('Login failed. Check the username and password.');
+
+  return {
+    ok: true,
+    session: {
+      role: 'sales',
+      repId: rep.Rep_ID,
+      name: rep.Rep_Name,
+      username: rep.Username,
+    },
+    data: getDashboardData(),
+  };
+}
+
+function updateSettings(payload) {
+  ensureHeaders();
+  const existing = getSettings();
+  const updates = {
+    manager_name: payload.manager_name || 'Manager',
+    manager_username: payload.manager_username || 'manager',
+    manager_password: payload.manager_password || existing.manager_password || 'manager123',
+    low_stock_limit: String(number(payload.low_stock_limit) || 10),
+    shop_name: payload.shop_name || 'WONSPAREPARTS',
+    welcome_note: payload.welcome_note || 'Welcome to WONSPAREPARTS',
+    thank_you_note: payload.thank_you_note || 'Thank you for buying from WONSPAREPARTS. Please come again.',
+  };
+
+  if (String(updates.manager_username).trim().toLowerCase() === 'sales') {
+    throw new Error('Manager username cannot be sales');
+  }
+
+  const duplicate = readObjects('salesReps').find((rep) => {
+    return String(rep.Username || '').trim().toLowerCase() === String(updates.manager_username).trim().toLowerCase();
+  });
+  if (duplicate) throw new Error('Manager username is already used by a sales representative');
+
+  Object.keys(updates).forEach((key) => setSetting(key, updates[key]));
+  return { ok: true, data: getDashboardData() };
 }
 
 function addCategory(payload) {
@@ -345,6 +418,7 @@ function addExpense(payload) {
 function getDashboardData() {
   ensureHeaders();
   return {
+    settings: getPublicSettings(),
     categories: readObjects('categories'),
     items: readObjects('items'),
     stockIn: readObjects('stockIn'),
@@ -397,6 +471,54 @@ function appendObject(key, object) {
   getSpreadsheet().getSheetByName(config.name).appendRow(row);
 }
 
+function getSettings() {
+  seedDefaultSettings();
+  const settings = {};
+  readObjects('settings').forEach((row) => {
+    settings[row.Setting_Key] = row.Setting_Value;
+  });
+  settings.low_stock_limit = number(settings.low_stock_limit) || 10;
+  return settings;
+}
+
+function getPublicSettings() {
+  const settings = getSettings();
+  settings.manager_password = '';
+  return settings;
+}
+
+function seedDefaultSettings() {
+  const defaults = {
+    manager_name: 'Manager',
+    manager_username: 'manager',
+    manager_password: 'manager123',
+    low_stock_limit: '10',
+    shop_name: 'WONSPAREPARTS',
+    welcome_note: 'Welcome to WONSPAREPARTS',
+    thank_you_note: 'Thank you for buying from WONSPAREPARTS. Please come again.',
+  };
+  Object.keys(defaults).forEach((key) => {
+    if (getSettingRowIndex(key) === -1) setSetting(key, defaults[key]);
+  });
+}
+
+function setSetting(key, value) {
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.settings.name);
+  const index = getSettingRowIndex(key);
+  if (index === -1) {
+    sheet.appendRow([key, value]);
+    return;
+  }
+  sheet.getRange(index + 2, 2).setValue(value);
+}
+
+function getSettingRowIndex(key) {
+  const sheet = getSpreadsheet().getSheetByName(SHEETS.settings.name);
+  if (!sheet || sheet.getLastRow() < 2) return -1;
+  const keys = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat();
+  return keys.findIndex((value) => value === key);
+}
+
 function nextId(key) {
   const config = SHEETS[key];
   const idHeader = config.headers[0];
@@ -439,7 +561,7 @@ function appendMovement(date, itemId, type, qtyChange, balanceAfter, reference, 
 
 function ensureUniqueRepUsername(username, currentRepId) {
   const normalized = String(username || '').trim().toLowerCase();
-  const managerUsername = 'manager';
+  const managerUsername = String(getSettings().manager_username || 'manager').trim().toLowerCase();
   if (normalized === managerUsername) throw new Error('Sales representative username cannot be manager');
   const duplicate = readObjects('salesReps').find((rep) => {
     return String(rep.Username || '').trim().toLowerCase() === normalized && rep.Rep_ID !== currentRepId;

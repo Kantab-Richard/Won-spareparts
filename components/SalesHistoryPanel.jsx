@@ -6,7 +6,7 @@ import { money, today } from "../lib/constants";
 import { buildReceipt, getDateRange, isDateInRange, printReceipt } from "../lib/business";
 import { DateFilterControl, EmptyState, Metric, Table } from "./ui";
 
-export function SalesHistoryPanel({ sales, items }) {
+export function SalesHistoryPanel({ sales, items, receiptSettings }) {
   const [filter, setFilter] = useState({ mode: "today", start: today, end: today });
   const [search, setSearch] = useState("");
   const range = useMemo(() => getDateRange(filter), [filter]);
@@ -75,7 +75,7 @@ export function SalesHistoryPanel({ sales, items }) {
                 <span>{group.items} lines</span>
                 <span>{group.quantity} qty</span>
                 <strong>{money.format(group.total)}</strong>
-                <button className="secondary-button compact-button" type="button" onClick={() => printReceipt(buildReceipt(group.receipt, sales, items, group.salesRep))}>
+                <button className="secondary-button compact-button" type="button" onClick={() => printReceipt(buildReceipt(group.receipt, sales, items, group.salesRep, receiptSettings))}>
                   <Printer size={15} />
                   <span>Reprint</span>
                 </button>

@@ -1,12 +1,12 @@
 "use client";
 
-import { ClipboardList, PackagePlus, TriangleAlert } from "lucide-react";
+import { ClipboardList, TriangleAlert } from "lucide-react";
 import { money, today } from "../lib/constants";
 import { DateFilterControl, EmptyState, Metric, StatusBadge, StockBadge, Table } from "./ui";
 
-export function Dashboard({ view, items, data, role, dateFilter, dateRange, onDateFilterChange, onNavigate }) {
+export function Dashboard({ view, items, data, role, dateFilter, dateRange, lowStockLimit = 10, onDateFilterChange, onNavigate }) {
   const isManager = role === "manager";
-  const lowStockItems = items.filter((item) => Number(item.Current_Stock || 0) <= 10);
+  const lowStockItems = items.filter((item) => Number(item.Current_Stock || 0) <= lowStockLimit);
   const hasInventory = items.length > 0;
   const hasSales = view.sales.length > 0;
 
@@ -34,7 +34,7 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, onDa
                 money.format(Number(item.Cost_Price || 0)),
                 money.format(Number(item.Selling_Price || 0)),
                 <>
-                  <StockBadge key={`${item.Item_ID}-stock`} value={Number(item.Current_Stock || 0)} />
+                  <StockBadge key={`${item.Item_ID}-stock`} value={Number(item.Current_Stock || 0)} limit={lowStockLimit} />
                   {isManager && <StatusBadge status={item.Status || "Active"} />}
                 </>,
             ])}
@@ -91,12 +91,12 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, onDa
                     <strong>{item.Item_Name}</strong>
                     <span>{view.categoryNames[item.Category_ID] || item.Category_ID}</span>
                   </div>
-                  <StockBadge value={Number(item.Current_Stock || 0)} />
+                  <StockBadge value={Number(item.Current_Stock || 0)} limit={lowStockLimit} />
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState title="Stock levels look good" message="Items with 10 or fewer pieces will appear here." />
+            <EmptyState title="Stock levels look good" message={`Items with ${lowStockLimit} or fewer pieces will appear here.`} />
           )}
         </section>
       )}

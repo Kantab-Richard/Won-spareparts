@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { LogOut, Menu, RefreshCw, ShieldCheck, UserRound, X } from "lucide-react";
 
-export function Sidebar({ activeTab, open, session, status, tabs, onClose, onLogout, onRefresh, onSelectTab, onToggle }) {
+export function Sidebar({ activeTab, open, session, status, sections, onClose, onLogout, onRefresh, onSelectTab, onToggle }) {
   return (
     <>
       {open && <button className="sidebar-backdrop" type="button" onClick={onClose} />}
@@ -31,20 +31,27 @@ export function Sidebar({ activeTab, open, session, status, tabs, onClose, onLog
           </div>
         </div>
         <nav className="tabs" aria-label="Main navigation">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                className={activeTab === tab.id ? "tab active" : "tab"}
-                onClick={() => onSelectTab(tab.id)}
-                title={tab.label}
-              >
-                <Icon size={18} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+          {sections.map((section) => (
+            <div className="sidebar-section" key={section.label}>
+              <span className="sidebar-section-title">{section.label}</span>
+              <div className="sidebar-section-items">
+                {section.items.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      className={activeTab === tab.id ? "tab active" : "tab"}
+                      onClick={() => onSelectTab(tab.id)}
+                      title={tab.label}
+                    >
+                      <Icon size={18} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="sync-box">
           <span>{status}</span>

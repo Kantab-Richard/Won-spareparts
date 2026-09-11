@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boxes, Pencil, Plus, ShoppingCart } from "lucide-react";
+import { Pencil, Plus, ShoppingCart } from "lucide-react";
 import { money } from "../lib/constants";
 import { EmptyState, Field, Select, StatusBadge, StatusSelect, StockBadge, useForm } from "./ui";
 
-export function ItemsPanel({ items, categories, role, onSubmit, onUpdate, onAddToCart }) {
+export function ItemsPanel({ items, categories, role, lowStockLimit = 10, onSubmit, onUpdate, onAddToCart }) {
   const [mode, setMode] = useState("list");
   const [editingId, setEditingId] = useState("");
   const [listOptions, setListOptions] = useState({ status: "all", category: "all", sort: "name" });
@@ -183,7 +183,7 @@ export function ItemsPanel({ items, categories, role, onSubmit, onUpdate, onAddT
                   </div>
                   <div>
                     <span>Stock</span>
-                    <StockBadge value={Number(item.Current_Stock || 0)} />
+                    <StockBadge value={Number(item.Current_Stock || 0)} limit={lowStockLimit} />
                   </div>
                   <div>
                     <span>Cost</span>

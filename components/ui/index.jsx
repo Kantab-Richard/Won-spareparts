@@ -51,11 +51,11 @@ export function FormPanel({ title, button, children, onSubmit }) {
   );
 }
 
-export function Field({ label, value, onChange, type = "text" }) {
+export function Field({ label, value, onChange, type = "text", required = true }) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input type={type} value={value} min={type === "number" ? "0" : undefined} step={type === "number" ? "0.01" : undefined} onChange={(event) => onChange(event.target.value)} required />
+      <input type={type} value={value} min={type === "number" ? "0" : undefined} step={type === "number" ? "0.01" : undefined} onChange={(event) => onChange(event.target.value)} required={required} />
     </label>
   );
 }
@@ -158,8 +158,8 @@ export function Table({ columns, rows }) {
   );
 }
 
-export function StockBadge({ value }) {
-  const className = value <= 10 ? "stock-badge low" : "stock-badge";
+export function StockBadge({ value, limit = 10 }) {
+  const className = value <= limit ? "stock-badge low" : "stock-badge";
   return <span className={className}>{value}</span>;
 }
 

@@ -233,6 +233,24 @@ button {
   gap: 8px;
 }
 
+.sidebar-section {
+  display: grid;
+  gap: 7px;
+}
+
+.sidebar-section-title {
+  color: #8fa0b3;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.sidebar-section-items {
+  display: grid;
+  gap: 6px;
+}
+
 .tab,
 .icon-button,
 .primary-button {
@@ -393,8 +411,8 @@ h2 {
 }
 
 .filter-chip.active {
-  background: var(--dark);
-  border-color: var(--dark);
+  background: #101820;
+  border-color: #101820;
   color: white;
 }
 
@@ -1072,6 +1090,23 @@ h2 {
   gap: 14px;
 }
 
+.receipt-settings-card {
+  grid-column: span 2;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.settings-tabs .filter-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
 .settings-actions {
   align-items: center;
   display: grid;
@@ -1087,7 +1122,7 @@ h2 {
   margin-top: 6px;
 }
 
-.settings-actions span {
+.settings-actions > div > span {
   color: var(--green);
   display: block;
   font-size: 13px;
@@ -1349,6 +1384,10 @@ th {
   }
 
   .tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-section-items {
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   }
 
@@ -1392,6 +1431,10 @@ th {
   }
 
   .sales-rep-list-card {
+    grid-column: span 1;
+  }
+
+  .receipt-settings-card {
     grid-column: span 1;
   }
 
@@ -1530,6 +1573,10 @@ th {
     grid-template-columns: 1fr;
     margin: 0;
     padding: 0;
+  }
+
+  .sidebar.open .sidebar-section-items {
+    grid-template-columns: 1fr;
   }
 
   .sidebar.open .sync-box {
@@ -1840,6 +1887,15 @@ th {
 
   .settings-actions .primary-button {
     width: 100%;
+  }
+
+  .settings-tabs {
+    justify-content: stretch;
+  }
+
+  .settings-tabs .filter-chip {
+    flex: 1 1 0;
+    justify-content: center;
   }
 
   .empty-state {
