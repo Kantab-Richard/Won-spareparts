@@ -16,6 +16,7 @@ import { ItemsPanel } from "../components/ItemsPanel";
 import { ExpensesPanel } from "../components/ExpensesPanel";
 import { CategoriesPanel } from "../components/CategoriesPanel";
 import { SettingsPanel } from "../components/SettingsPanel";
+import { FloatingCartButton } from "../components/FloatingCartButton";
 import { buildLoginUsers, buildReceipt, buildViewModel, getDateRange, normalizeName } from "../lib/business";
 import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, today } from "../lib/constants";
 
@@ -46,6 +47,7 @@ export default function Home() {
   const visibleSections = useMemo(() => sidebarSections[session?.role] || [], [session?.role]);
   const appSettings = useMemo(() => ({ ...defaultSettings, ...(data.settings || {}) }), [data.settings]);
   const lowStockLimit = Number(appSettings.low_stock_limit || defaultSettings.low_stock_limit);
+  const cartCount = saleCart.reduce((sum, entry) => sum + Number(entry.Qty_Sold || 0), 0);
 
   const loadData = useCallback(async () => {
     setStatus("Refreshing records...");
@@ -422,6 +424,14 @@ export default function Home() {
           />
         )}
       </section>
+      <FloatingCartButton
+        active={activeTab === "sales"}
+        count={cartCount}
+        onOpen={() => {
+          setActiveTab("sales");
+          setSidebarOpen(false);
+        }}
+      />
     </main>
   );
 }
