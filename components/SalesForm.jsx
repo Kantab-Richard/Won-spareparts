@@ -3,13 +3,11 @@
 import { useState } from "react";
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { money, today } from "../lib/constants";
-import { EmptyState, Field, FormPanel, Select, useForm } from "./ui";
+import { EmptyState, Field } from "./ui";
 import { ReceiptPanel } from "./ReceiptPanel";
 
-export function SalesForm({ items, cart, receipt, onSubmit, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
-  const [form, setForm] = useForm({ Date: today, Item_ID: "", Qty_Sold: 1 });
+export function SalesForm({ items, cart, receipt, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
   const [cartDate, setCartDate] = useState(today);
-  const selected = items.find((item) => item.Item_ID === form.Item_ID);
   const itemMap = Object.fromEntries(items.map((item) => [item.Item_ID, item]));
   const cartRows = cart
     .map((entry) => ({ ...entry, item: itemMap[entry.Item_ID] }))
@@ -24,21 +22,7 @@ export function SalesForm({ items, cart, receipt, onSubmit, onCartQty, onRemoveC
   }
 
   return (
-    <div className="split sales-layout">
-      <FormPanel
-        title="Record Single Sale"
-        button="Save Sale"
-        onSubmit={() => onSubmit(form, () => setForm({ Date: today, Item_ID: "", Qty_Sold: 1 }))}
-      >
-        <Field label="Date" type="date" value={form.Date} onChange={(Date) => setForm({ Date })} />
-        <Select label="Item" value={form.Item_ID} onChange={(Item_ID) => setForm({ Item_ID })} options={items} />
-        <Field label="Quantity Sold" type="number" value={form.Qty_Sold} onChange={(Qty_Sold) => setForm({ Qty_Sold })} />
-        <div className="calculation">
-          <span>Expected total</span>
-          <strong>{money.format(Number(form.Qty_Sold || 0) * Number(selected?.Selling_Price || 0))}</strong>
-        </div>
-      </FormPanel>
-
+    <div className="sales-layout">
       <section className="panel sale-cart-panel">
         <div className="panel-heading">
           <div>

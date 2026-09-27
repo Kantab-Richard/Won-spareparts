@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { addBasketSale, addCategory, addExpense, addItem, addSale, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, loginUser, updateCategory, updateItem, updateSalesRep, updateSettings, updateSupplier } from "../lib/api";
+import { addBasketSale, addCategory, addExpense, addItem, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, loginUser, updateCategory, updateItem, updateSalesRep, updateSettings, updateSupplier } from "../lib/api";
 import { HeaderBar } from "../components/HeaderBar";
 import { Sidebar } from "../components/Sidebar";
 import { Dashboard } from "../components/Dashboard";
@@ -17,8 +17,9 @@ import { ExpensesPanel } from "../components/ExpensesPanel";
 import { CategoriesPanel } from "../components/CategoriesPanel";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { FloatingCartButton } from "../components/FloatingCartButton";
+import { HubPanel } from "../components/HubPanel";
 import { buildLoginUsers, buildReceipt, buildViewModel, getDateRange, normalizeName } from "../lib/business";
-import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, today } from "../lib/constants";
+import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, tabs, today } from "../lib/constants";
 
 export default function Home() {
   const [session, setSession] = useState(null);
@@ -48,6 +49,19 @@ export default function Home() {
   const appSettings = useMemo(() => ({ ...defaultSettings, ...(data.settings || {}) }), [data.settings]);
   const lowStockLimit = Number(appSettings.low_stock_limit || defaultSettings.low_stock_limit);
   const cartCount = saleCart.reduce((sum, entry) => sum + Number(entry.Qty_Sold || 0), 0);
+  const tabMap = useMemo(() => Object.fromEntries(tabs.map((tab) => [tab.id, tab])), []);
+  const inventoryCards = useMemo(() => [
+    { ...tabMap.items, description: "Create, edit, price, and add items to cart." },
+    { ...tabMap.stock, description: "Record new stock purchases and supplier invoices." },
+    { ...tabMap.categories, description: "Organize items into active or inactive categories." },
+    { ...tabMap.suppliers, description: "Manage supplier names, phone numbers, and status." },
+    { ...tabMap.aiSupply, description: "Scan or paste supply sheets into reviewed stock rows." },
+  ], [tabMap]);
+  const reportCards = useMemo(() => [
+    { ...tabMap.salesHistory, description: "Review receipts, totals, and reprint old sales." },
+    { ...tabMap.history, description: "Track stock movement from purchases, sales, and edits." },
+    { ...tabMap.dashboard, id: "lowStock", label: "Low Stock", target: "dashboard", description: "View manager low-stock alerts on the dashboard." },
+  ], [tabMap]);
 
   const loadData = useCallback(async () => {
     setStatus("Refreshing records...");
@@ -113,35 +127,6 @@ export default function Home() {
 
   function removeCartItem(itemId) {
     setSaleCart((current) => current.filter((entry) => entry.Item_ID !== itemId));
-  }
-
-  async function submitSingleSale(payload, reset) {
-    setStatus("Saving sale...");
-    try {
-      const result = await addSale({
-        ...payload,
-        Sales_Rep_ID: session?.repId || "",
-        Sales_Rep_Name: session?.name || "",
-      });
-      reset?.();
-      const receiptNo = result.receiptNo || result.saleId || result.data?.sales?.slice(-1)?.[0]?.Receipt_No;
-      const nextData = result.data || (await fetchDatabase());
-      setData({
-        settings: { ...defaultSettings, ...(nextData.settings || {}) },
-        categories: nextData.categories || [],
-        items: nextData.items || [],
-        sales: nextData.sales || [],
-        stockIn: nextData.stockIn || [],
-        suppliers: nextData.suppliers || [],
-        movements: nextData.movements || [],
-        salesReps: nextData.salesReps || [],
-        expenses: nextData.expenses || [],
-      });
-      setLastReceipt(buildReceipt(receiptNo, nextData.sales || [], nextData.items || [], session?.name || "", appSettings));
-      setStatus("Sale saved successfully");
-    } catch (error) {
-      setStatus(error.message);
-    }
   }
 
   async function submitBasketSale(date) {
@@ -360,12 +345,29 @@ export default function Home() {
             items={activeItems}
             cart={saleCart}
             receipt={lastReceipt}
-            onSubmit={submitSingleSale}
             onCartQty={updateCartQty}
             onRemoveCartItem={removeCartItem}
             onCheckout={submitBasketSale}
             onClearCart={() => setSaleCart([])}
             onClearReceipt={() => setLastReceipt(null)}
+          />
+        )}
+        {activeTab === "inventory" && session.role === "manager" && (
+          <HubPanel
+            eyebrow="Inventory"
+            title="Inventory Tools"
+            description="Everything for items, stock, suppliers, categories, and scanned supply records."
+            cards={inventoryCards}
+            onNavigate={setActiveTab}
+          />
+        )}
+        {activeTab === "reports" && session.role === "manager" && (
+          <HubPanel
+            eyebrow="Reports"
+            title="Business Reports"
+            description="Review sales, stock movement, and low-stock action points."
+            cards={reportCards}
+            onNavigate={setActiveTab}
           />
         )}
         {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}

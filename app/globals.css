@@ -606,6 +606,8 @@ h2 {
 
 .sales-layout {
   align-items: start;
+  display: grid;
+  gap: 16px;
 }
 
 .sale-cart-panel {
@@ -765,6 +767,64 @@ h2 {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.hub-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.hub-heading span {
+  color: var(--muted);
+  display: block;
+  font-size: 14px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.hub-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.hub-card {
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  padding: 16px;
+  text-align: left;
+}
+
+.hub-card:hover {
+  border-color: rgba(244, 123, 32, 0.55);
+  box-shadow: 0 12px 30px rgba(23, 32, 42, 0.1);
+}
+
+.hub-card-icon {
+  align-items: center;
+  background: rgba(244, 123, 32, 0.14);
+  border-radius: 8px;
+  color: var(--orange);
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.hub-card strong {
+  font-size: 17px;
+}
+
+.hub-card > span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .receipt-print-panel {
@@ -1525,6 +1585,10 @@ th {
   .panel.wide {
     grid-column: span 1;
   }
+
+  .hub-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -2001,6 +2065,14 @@ th {
   .empty-state {
     min-height: 112px;
     padding: 14px;
+  }
+
+  .hub-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-card {
+    min-height: 126px;
   }
 
   .low-stock-row {

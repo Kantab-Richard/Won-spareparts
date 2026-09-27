@@ -3,6 +3,15 @@
 import Image from "next/image";
 import { LogOut, Menu, RefreshCw, ShieldCheck, UserRound, X } from "lucide-react";
 
+const activeGroups = {
+  inventory: ["inventory", "items", "stock", "categories", "suppliers", "aiSupply"],
+  reports: ["reports", "salesHistory", "history"],
+};
+
+function isTabActive(activeTab, tabId) {
+  return activeTab === tabId || activeGroups[tabId]?.includes(activeTab);
+}
+
 export function Sidebar({ activeTab, open, session, status, sections, onClose, onLogout, onRefresh, onSelectTab, onToggle }) {
   return (
     <>
@@ -40,7 +49,7 @@ export function Sidebar({ activeTab, open, session, status, sections, onClose, o
                   return (
                     <button
                       key={tab.id}
-                      className={activeTab === tab.id ? "tab active" : "tab"}
+                      className={isTabActive(activeTab, tab.id) ? "tab active" : "tab"}
                       onClick={() => onSelectTab(tab.id)}
                       title={tab.label}
                     >
