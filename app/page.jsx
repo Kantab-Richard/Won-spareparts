@@ -18,6 +18,7 @@ import { CategoriesPanel } from "../components/CategoriesPanel";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { FloatingCartButton } from "../components/FloatingCartButton";
 import { HubPanel } from "../components/HubPanel";
+import { LowStockPanel } from "../components/LowStockPanel";
 import { buildLoginUsers, buildReceipt, buildViewModel, getDateRange, normalizeName } from "../lib/business";
 import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, tabs, today } from "../lib/constants";
 
@@ -60,7 +61,7 @@ export default function Home() {
   const reportCards = useMemo(() => [
     { ...tabMap.salesHistory, description: "Review receipts, totals, and reprint old sales." },
     { ...tabMap.history, description: "Track stock movement from purchases, sales, and edits." },
-    { ...tabMap.dashboard, id: "lowStock", label: "Low Stock", target: "dashboard", description: "View manager low-stock alerts on the dashboard." },
+    { ...tabMap.lowStock, description: "Open only items at or below the low-stock limit." },
   ], [tabMap]);
 
   const loadData = useCallback(async () => {
@@ -345,6 +346,7 @@ export default function Home() {
             items={activeItems}
             cart={saleCart}
             receipt={lastReceipt}
+            onAddToCart={addToCart}
             onCartQty={updateCartQty}
             onRemoveCartItem={removeCartItem}
             onCheckout={submitBasketSale}
@@ -368,6 +370,14 @@ export default function Home() {
             description="Review sales, stock movement, and low-stock action points."
             cards={reportCards}
             onNavigate={setActiveTab}
+          />
+        )}
+        {activeTab === "lowStock" && session.role === "manager" && (
+          <LowStockPanel
+            items={filteredItems.filter((item) => Number(item.Current_Stock || 0) <= lowStockLimit)}
+            categoryNames={view.categoryNames}
+            lowStockLimit={lowStockLimit}
+            onAddToCart={addToCart}
           />
         )}
         {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}

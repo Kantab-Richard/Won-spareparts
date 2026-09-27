@@ -5,7 +5,7 @@ import { LogOut, Menu, RefreshCw, ShieldCheck, UserRound, X } from "lucide-react
 
 const activeGroups = {
   inventory: ["inventory", "items", "stock", "categories", "suppliers", "aiSupply"],
-  reports: ["reports", "salesHistory", "history"],
+  reports: ["reports", "salesHistory", "history", "lowStock"],
 };
 
 function isTabActive(activeTab, tabId) {

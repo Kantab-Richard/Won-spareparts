@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { money, today } from "../lib/constants";
 import { EmptyState, Field } from "./ui";
 import { ReceiptPanel } from "./ReceiptPanel";
 
-export function SalesForm({ items, cart, receipt, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
+export function SalesForm({ items, cart, receipt, onAddToCart, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
   const [cartDate, setCartDate] = useState(today);
+  const [itemSearch, setItemSearch] = useState("");
   const itemMap = Object.fromEntries(items.map((item) => [item.Item_ID, item]));
   const cartRows = cart
     .map((entry) => ({ ...entry, item: itemMap[entry.Item_ID] }))
     .filter((entry) => entry.item);
   const cartTotal = cartRows.reduce((sum, entry) => sum + Number(entry.Qty_Sold || 0) * Number(entry.item.Selling_Price || 0), 0);
+  const searchText = itemSearch.trim().toLowerCase();
+  const saleItems = items
+    .filter((item) => Number(item.Current_Stock || 0) > 0)
+    .filter((item) => !searchText || `${item.Item_Name} ${item.Item_ID}`.toLowerCase().includes(searchText))
+    .slice(0, 8);
 
   function clearCartWithConfirm() {
     if (!cartRows.length) return;
@@ -23,6 +29,39 @@ export function SalesForm({ items, cart, receipt, onCartQty, onRemoveCartItem, o
 
   return (
     <div className="sales-layout">
+      <section className="panel sale-item-picker">
+        <div className="panel-heading">
+          <div>
+            <h2>Add Items</h2>
+            <span>Search by item name or code, then add to the sale cart.</span>
+          </div>
+          <Search size={18} />
+        </div>
+        <label className="history-search sale-search">
+          <Search size={17} />
+          <input value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} placeholder="Search items for sale" />
+        </label>
+        {saleItems.length ? (
+          <div className="sale-item-list">
+            {saleItems.map((item) => (
+              <article className="sale-item-row" key={item.Item_ID}>
+                <div>
+                  <strong>{item.Item_Name}</strong>
+                  <span>{item.Item_ID} · Stock {Number(item.Current_Stock || 0)}</span>
+                </div>
+                <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
+                <button className="primary-button compact-button" type="button" onClick={() => onAddToCart(item)}>
+                  <Plus size={16} />
+                  <span>Add</span>
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No sellable items found" message="Try another search or add stock to this item first." />
+        )}
+      </section>
+
       <section className="panel sale-cart-panel">
         <div className="panel-heading">
           <div>
