@@ -491,6 +491,30 @@ h2 {
   gap: 8px;
   min-height: 112px;
   padding: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.metric::before {
+  border-radius: 999px;
+  content: "";
+  height: 70px;
+  opacity: 0.2;
+  position: absolute;
+  right: -24px;
+  top: -30px;
+  width: 70px;
+}
+
+.metric::after {
+  border-radius: 999px;
+  bottom: -34px;
+  content: "";
+  height: 90px;
+  opacity: 0.14;
+  position: absolute;
+  right: 30px;
+  width: 90px;
 }
 
 .metric span,
@@ -501,6 +525,99 @@ h2 {
 
 .metric strong {
   font-size: 26px;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  position: relative;
+  z-index: 1;
+}
+
+.metric span {
+  position: relative;
+  z-index: 1;
+}
+
+.metric-green {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.metric-green::before,
+.metric-green::after {
+  background: #16a34a;
+}
+
+.metric-green strong {
+  color: #14532d;
+}
+
+.metric-blue {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.metric-blue::before,
+.metric-blue::after {
+  background: #2563eb;
+}
+
+.metric-blue strong {
+  color: #1e3a8a;
+}
+
+.metric-orange {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.metric-orange::before,
+.metric-orange::after {
+  background: #f97316;
+}
+
+.metric-orange strong {
+  color: #9a3412;
+}
+
+.metric-indigo {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.metric-indigo::before,
+.metric-indigo::after {
+  background: #4f46e5;
+}
+
+.metric-indigo strong {
+  color: #312e81;
+}
+
+.metric-red {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.metric-red::before,
+.metric-red::after {
+  background: #dc2626;
+}
+
+.metric-red strong {
+  color: #991b1b;
+}
+
+.metric-dark {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.metric-dark::before,
+.metric-dark::after {
+  background: #101820;
+}
+
+.metric-dark strong {
+  color: #101820;
 }
 
 .panel {
@@ -522,6 +639,10 @@ h2 {
 
 .dashboard-summary-panel {
   align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 122, 24, 0.12), rgba(37, 99, 235, 0.08)),
+    var(--panel);
+  border-color: #fed7aa;
   display: grid;
   gap: 18px;
   grid-column: span 4;
@@ -571,6 +692,7 @@ h2 {
 }
 
 .dashboard-quick-panel {
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
   grid-column: span 2;
 }
 
@@ -622,6 +744,8 @@ h2 {
 }
 
 .top-sellers-panel {
+  background: linear-gradient(180deg, #ffffff, #f0fdf4);
+  border-color: #bbf7d0;
   grid-column: span 2;
 }
 
@@ -686,6 +810,73 @@ h2 {
   height: 34px;
   justify-content: center;
   width: 34px;
+}
+
+.inventory-preview-heading {
+  align-items: flex-start;
+}
+
+.inventory-preview-panel {
+  background: linear-gradient(180deg, #ffffff, #eef2ff);
+  border-color: #c7d2fe;
+}
+
+.inventory-preview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inventory-preview-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, auto) minmax(72px, auto) auto;
+  min-height: 62px;
+  padding: 10px 12px;
+}
+
+.inventory-preview-row > div {
+  min-width: 0;
+}
+
+.inventory-preview-row strong,
+.inventory-preview-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-preview-row strong {
+  font-size: 14px;
+}
+
+.inventory-preview-row span,
+.inventory-preview-price span,
+.inventory-preview-stock span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inventory-preview-price b {
+  display: block;
+  font-size: 15px;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.inventory-preview-stock {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.recent-sales-panel {
+  background: linear-gradient(180deg, #ffffff, #eff6ff);
+  border-color: #bfdbfe;
 }
 
 .split {
@@ -1796,6 +1987,8 @@ h2 {
 }
 
 .low-stock-panel {
+  background: linear-gradient(180deg, #ffffff, #fff7ed);
+  border-color: #fed7aa;
   grid-column: span 1;
 }
 
@@ -2245,6 +2438,25 @@ th {
 
   .dashboard-action-card {
     min-height: 68px;
+  }
+
+  .inventory-preview-heading {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-preview-heading .secondary-button {
+    width: 100%;
+  }
+
+  .inventory-preview-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .inventory-preview-row .status-badge {
+    grid-column: 1 / -1;
+    width: fit-content;
   }
 
   .item-form-grid {

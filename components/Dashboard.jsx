@@ -8,6 +8,7 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, lowS
   const isManager = role === "manager";
   const lowStockItems = items.filter((item) => Number(item.Current_Stock || 0) <= lowStockLimit);
   const activeItems = items.filter((item) => (item.Status || "Active") === "Active");
+  const inventoryPreview = items.slice(0, 5);
   const itemsSold = view.sales.reduce((sum, sale) => sum + Number(sale.Qty_Sold || 0), 0);
   const topSellingItems = Object.values(
     view.sales.reduce((grouped, sale) => {
@@ -73,16 +74,16 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, lowS
         </div>
       </section>
 
-      <Metric title={isManager ? "Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : activeItems.length} />
-      <Metric title={isManager ? "Gross Profit" : "Stock Units"} value={isManager ? money.format(view.grossProfit) : activeItems.reduce((sum, item) => sum + Number(item.Current_Stock || 0), 0)} />
-      <Metric title={isManager ? "Net Profit" : "Sales Today"} value={isManager ? money.format(view.netProfit) : data.sales.filter((sale) => sale.Date === today).length} />
-      <Metric title={isManager ? "Stock Value" : "Recent Sales"} value={isManager ? money.format(view.stockValue) : data.sales.length} />
+      <Metric title={isManager ? "Revenue" : "Items Available"} value={isManager ? money.format(view.revenue) : activeItems.length} tone="green" />
+      <Metric title={isManager ? "Gross Profit" : "Stock Units"} value={isManager ? money.format(view.grossProfit) : activeItems.reduce((sum, item) => sum + Number(item.Current_Stock || 0), 0)} tone="blue" />
+      <Metric title={isManager ? "Net Profit" : "Sales Today"} value={isManager ? money.format(view.netProfit) : data.sales.filter((sale) => sale.Date === today).length} tone={isManager && view.netProfit < 0 ? "red" : "orange"} />
+      <Metric title={isManager ? "Stock Value" : "Recent Sales"} value={isManager ? money.format(view.stockValue) : data.sales.length} tone="indigo" />
 
       {isManager && (
-        <Metric title="Expenses" value={money.format(view.expenses)} />
+        <Metric title="Expenses" value={money.format(view.expenses)} tone="red" />
       )}
       {isManager && (
-        <Metric title="Items Sold" value={itemsSold} />
+        <Metric title="Items Sold" value={itemsSold} tone="dark" />
       )}
 
       <section className="panel dashboard-quick-panel">
@@ -142,25 +143,39 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, lowS
         </section>
       )}
 
-      <section className="panel wide">
-        <div className="panel-heading">
-          <h2>Inventory</h2>
-          <span>{items.length} items</span>
+      <section className="panel wide inventory-preview-panel">
+        <div className="panel-heading inventory-preview-heading">
+          <div>
+            <h2>Inventory Preview</h2>
+            <span>{items.length} items total</span>
+          </div>
+          {hasInventory && (
+            <button className="secondary-button compact" type="button" onClick={() => onNavigate("items")}>
+              <Boxes size={16} />
+              <span>View All Items</span>
+            </button>
+          )}
         </div>
         {hasInventory ? (
-          <Table
-            columns={["Item", "Category", "Cost", "Selling", "Stock"]}
-            rows={items.map((item) => [
-              item.Item_Name,
-                view.categoryNames[item.Category_ID] || item.Category_ID,
-                money.format(Number(item.Cost_Price || 0)),
-                money.format(Number(item.Selling_Price || 0)),
-                <>
-                  <StockBadge key={`${item.Item_ID}-stock`} value={Number(item.Current_Stock || 0)} limit={lowStockLimit} />
-                  {isManager && <StatusBadge status={item.Status || "Active"} />}
-                </>,
-            ])}
-          />
+          <div className="inventory-preview-list">
+            {inventoryPreview.map((item) => (
+              <div className="inventory-preview-row" key={item.Item_ID}>
+                <div>
+                  <strong>{item.Item_Name}</strong>
+                  <span>{view.categoryNames[item.Category_ID] || item.Category_ID || "No category"}</span>
+                </div>
+                <div className="inventory-preview-price">
+                  <span>Price</span>
+                  <b>{money.format(Number(item.Selling_Price || 0))}</b>
+                </div>
+                <div className="inventory-preview-stock">
+                  <span>Stock</span>
+                  <StockBadge value={Number(item.Current_Stock || 0)} limit={lowStockLimit} />
+                </div>
+                {isManager && <StatusBadge status={item.Status || "Active"} />}
+              </div>
+            ))}
+          </div>
         ) : (
           <EmptyState
             title="No inventory yet"
@@ -171,7 +186,7 @@ export function Dashboard({ view, items, data, role, dateFilter, dateRange, lowS
         )}
       </section>
 
-      <section className="panel">
+      <section className="panel recent-sales-panel">
         <div className="panel-heading">
           <h2>Recent Sales</h2>
           <ClipboardList size={18} />

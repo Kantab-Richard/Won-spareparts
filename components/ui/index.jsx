@@ -5,9 +5,9 @@ import { Plus } from "lucide-react";
 import { dateFilterOptions } from "../../lib/constants";
 import { formatDateRange } from "../../lib/business";
 
-export function Metric({ title, value }) {
+export function Metric({ title, value, tone = "neutral" }) {
   return (
-    <section className="metric">
+    <section className={`metric metric-${tone}`}>
       <span>{title}</span>
       <strong>{value}</strong>
     </section>
