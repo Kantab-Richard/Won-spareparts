@@ -159,7 +159,7 @@ export function Table({ columns, rows }) {
 }
 
 export function StockBadge({ value, limit = 10 }) {
-  const className = value <= limit ? "stock-badge low" : "stock-badge";
+  const className = value <= 0 ? "stock-badge empty" : value <= limit ? "stock-badge low" : "stock-badge";
   return <span className={className}>{value}</span>;
 }
 

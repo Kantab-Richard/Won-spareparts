@@ -9,6 +9,7 @@ import { ReceiptPanel } from "./ReceiptPanel";
 export function SalesForm({ items, cart, receipt, onAddToCart, onCartQty, onRemoveCartItem, onCheckout, onClearCart, onClearReceipt }) {
   const [cartDate, setCartDate] = useState(today);
   const [itemSearch, setItemSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const itemMap = Object.fromEntries(items.map((item) => [item.Item_ID, item]));
   const cartRows = cart
     .map((entry) => ({ ...entry, item: itemMap[entry.Item_ID] }))
@@ -17,13 +18,30 @@ export function SalesForm({ items, cart, receipt, onAddToCart, onCartQty, onRemo
   const searchText = itemSearch.trim().toLowerCase();
   const saleItems = items
     .filter((item) => Number(item.Current_Stock || 0) > 0)
-    .filter((item) => !searchText || `${item.Item_Name} ${item.Item_ID}`.toLowerCase().includes(searchText))
+    .filter((item) => searchText && `${item.Item_Name} ${item.Item_ID}`.toLowerCase().includes(searchText))
     .slice(0, 8);
+  const showDropdown = searchOpen && searchText;
 
   function clearCartWithConfirm() {
     if (!cartRows.length) return;
     if (window.confirm("Clear all items from this sale cart?")) {
       onClearCart();
+    }
+  }
+
+  function addSearchItem(item) {
+    onAddToCart(item);
+    setItemSearch("");
+    setSearchOpen(false);
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === "Enter" && saleItems[0]) {
+      event.preventDefault();
+      addSearchItem(saleItems[0]);
+    }
+    if (event.key === "Escape") {
+      setSearchOpen(false);
     }
   }
 
@@ -37,29 +55,43 @@ export function SalesForm({ items, cart, receipt, onAddToCart, onCartQty, onRemo
           </div>
           <Search size={18} />
         </div>
-        <label className="history-search sale-search">
-          <Search size={17} />
-          <input value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} placeholder="Search items for sale" />
-        </label>
-        {saleItems.length ? (
-          <div className="sale-item-list">
-            {saleItems.map((item) => (
-              <article className="sale-item-row" key={item.Item_ID}>
-                <div>
-                  <strong>{item.Item_Name}</strong>
-                  <span>{item.Item_ID} · Stock {Number(item.Current_Stock || 0)}</span>
-                </div>
-                <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
-                <button className="primary-button compact-button" type="button" onClick={() => onAddToCart(item)}>
-                  <Plus size={16} />
-                  <span>Add</span>
-                </button>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No sellable items found" message="Try another search or add stock to this item first." />
-        )}
+        <div className="sale-search-wrap">
+          <label className="history-search sale-search">
+            <Search size={17} />
+            <input
+              value={itemSearch}
+              onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)}
+              onChange={(event) => {
+                setItemSearch(event.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search item name or code"
+            />
+          </label>
+          {showDropdown && (
+            <div className="sale-item-dropdown">
+              {saleItems.length ? (
+                saleItems.map((item) => (
+                  <button className="sale-item-option" key={item.Item_ID} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addSearchItem(item)}>
+                    <div>
+                      <strong>{item.Item_Name}</strong>
+                      <span>{item.Item_ID} · Stock {Number(item.Current_Stock || 0)}</span>
+                    </div>
+                    <strong>{money.format(Number(item.Selling_Price || 0))}</strong>
+                    <span className="sale-add-chip">
+                      <Plus size={14} />
+                      Add
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="sale-item-empty">No item found</div>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="panel sale-cart-panel">

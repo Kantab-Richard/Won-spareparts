@@ -102,6 +102,8 @@ export default function Home() {
   const filteredItems = data.items.filter((item) =>
     `${item.Item_Name} ${item.Item_ID} ${item.Status || "Active"}`.toLowerCase().includes(query.toLowerCase())
   );
+  const lowStockItems = filteredItems.filter((item) => Number(item.Current_Stock || 0) <= lowStockLimit);
+  const outOfStockCount = lowStockItems.filter((item) => Number(item.Current_Stock || 0) <= 0).length;
   const activeItems = data.items.filter((item) => (item.Status || "Active") === "Active");
 
   function addToCart(item) {
@@ -326,7 +328,13 @@ export default function Home() {
       />
 
       <section className="workspace">
-        <HeaderBar query={query} onQueryChange={setQuery} />
+        <HeaderBar
+          query={query}
+          lowStockCount={session.role === "manager" ? lowStockItems.length : 0}
+          outOfStockCount={session.role === "manager" ? outOfStockCount : 0}
+          onLowStockClick={session.role === "manager" ? () => setActiveTab("lowStock") : undefined}
+          onQueryChange={setQuery}
+        />
 
         {activeTab === "dashboard" && (
           <Dashboard
@@ -374,7 +382,7 @@ export default function Home() {
         )}
         {activeTab === "lowStock" && session.role === "manager" && (
           <LowStockPanel
-            items={filteredItems.filter((item) => Number(item.Current_Stock || 0) <= lowStockLimit)}
+            items={lowStockItems}
             categoryNames={view.categoryNames}
             lowStockLimit={lowStockLimit}
             onAddToCart={addToCart}
