@@ -1,0 +1,13 @@
+{"kind":"deck","id":"pr/3dv1un","name":"Deck"}
+{"kind":"layout","layoutId":"63207cd5-0c5c-4d43-ba23-e3dda52733af","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"b54528c4-9d0e-4d12-a43e-9a73261ee740","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/byptue","slide":1,"title":"CLIENT PRESENTATION","textShapes":5}
+{"kind":"shape","id":"sh/0f61krih","slide":1,"bbox":[0,0,580,720]}
+{"kind":"shape","id":"sh/1gfitcz2","slide":1,"bbox":[0,0,1280,720]}
+{"kind":"textbox","id":"sh/q94zex0f","slide":1,"text":"CLIENT PRESENTATION","textPreview":"CLIENT PRESENTATION","textChars":19,"textLines":1,"bbox":[72,76,430,34]}
+{"kind":"textbox","id":"sh/rad0n2hk","slide":1,"text":"WONSPAREPARTS\nSales & Inventory App","textPreview":"WONSPAREPARTS | Sales & Inventory App","textChars":35,"textLines":2,"bbox":[72,130,515,180]}
+{"kind":"textbox","id":"sh/sbmhg7i5","slide":1,"text":"An installable business app for sales, stock control, receipts, reports and offline sync.","textPreview":"An installable business app for sales, stock control, receipts, reports and offline sync.","textChars":89,"textLines":1,"bbox":[75,323,460,72]}
+{"kind":"textbox","id":"sh/dcvipczq","slide":1,"text":"Built for spare parts shops that need faster sales, accurate stock records and mobile access from the shop floor.","textPreview":"Built for spare parts shops that need faster sales, accurate stock records and mobile access from the shop floor.","textChars":113,"textLines":1,"bbox":[77,430,445,118]}
+{"kind":"textbox","id":"sh/a58jq10j","slide":1,"text":"Phone sales  |  live stock  |  receipt printing  |  offline queue","textPreview":"Phone sales  |  live stock  |  receipt printing  |  offline queue","textChars":65,"textLines":1,"bbox":[77,602,510,42]}
+{"kind":"image","id":"im/2d8jmhcr","slide":1,"name":"","alt":"3D visual of WONSPAREPARTS app on phone and desktop dashboard in a spare parts warehouse","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/byptue","slide":1,"text":"Animation sequence for PowerPoint: start with the 3D app visual on screen, then fade in the title, subtitle and footer line in that order.\nTalk track: WONSPAREPARTS gives the manager and sales reps one place to sell, track stock, print receipts and keep working when the network is weak.\nClose the slide by pointing to the phone and desktop screens as the reason the system works across devices."}
