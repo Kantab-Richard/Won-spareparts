@@ -24,6 +24,7 @@ import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, ta
 
 const DATA_CACHE_KEY = "wonspareparts-offline-data";
 const SYNC_QUEUE_KEY = "wonspareparts-sync-queue";
+const LOGIN_CACHE_KEY = "wonspareparts-offline-logins";
 
 function normalizeShopData(nextData = {}) {
   return {
@@ -61,6 +62,42 @@ function buildOfflineReceiptNo() {
 function canSaveOffline(error) {
   if (typeof window !== "undefined" && !window.navigator.onLine) return true;
   return /failed to fetch|network|offline|load failed/i.test(error?.message || "");
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function hashLoginPassword(username, password) {
+  const input = `wonspareparts:${normalizeUsername(username)}:${String(password || "")}`;
+  if (window.crypto?.subtle) {
+    const bytes = new TextEncoder().encode(input);
+    const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return window.btoa(unescape(encodeURIComponent(input)));
+}
+
+async function buildOfflineLoginRecord({ username, password, role, name, repId = "" }) {
+  return {
+    username: normalizeUsername(username),
+    passwordHash: await hashLoginPassword(username, password),
+    role,
+    name,
+    repId,
+    cachedAt: new Date().toISOString(),
+  };
+}
+
+function mergeLoginRecords(existing, nextRecords) {
+  const merged = new Map();
+  existing.forEach((record) => {
+    if (record?.username && record?.passwordHash) merged.set(record.username, record);
+  });
+  nextRecords.forEach((record) => {
+    if (record?.username && record?.passwordHash) merged.set(record.username, record);
+  });
+  return Array.from(merged.values());
 }
 
 export default function Home() {
@@ -146,6 +183,37 @@ export default function Home() {
     return normalized;
   }, []);
 
+  const cacheOfflineLogins = useCallback(async (nextData, currentSession, currentCredentials) => {
+    const existing = readStoredJson(LOGIN_CACHE_KEY, []);
+    const records = [];
+    const normalized = normalizeShopData(nextData);
+
+    if (currentSession?.username && currentCredentials?.password) {
+      records.push(await buildOfflineLoginRecord({
+        username: currentSession.username,
+        password: currentCredentials.password,
+        role: currentSession.role,
+        name: currentSession.name,
+        repId: currentSession.repId || "",
+      }));
+    }
+
+    for (const rep of normalized.salesReps) {
+      if ((rep.Status || "Active") !== "Active" || !rep.Username || !rep.Password) continue;
+      records.push(await buildOfflineLoginRecord({
+        username: rep.Username,
+        password: rep.Password,
+        role: "sales",
+        name: rep.Rep_Name || "Sales Representative",
+        repId: rep.Rep_ID || "",
+      }));
+    }
+
+    if (records.length) {
+      saveStoredJson(LOGIN_CACHE_KEY, mergeLoginRecords(existing, records));
+    }
+  }, []);
+
   const saveQueue = useCallback((queue) => {
     saveStoredJson(SYNC_QUEUE_KEY, queue);
     setPendingSyncCount(queue.length);
@@ -172,6 +240,7 @@ export default function Home() {
     try {
       const nextData = await fetchDatabase();
       applyShopData(nextData, "Records loaded");
+      await cacheOfflineLogins(nextData, session);
     } catch (error) {
       const cachedData = readStoredJson(DATA_CACHE_KEY, null);
       if (cachedData) {
@@ -181,7 +250,7 @@ export default function Home() {
         setStatus(error.message);
       }
     }
-  }, [applyShopData]);
+  }, [applyShopData, cacheOfflineLogins, session]);
 
   const syncOfflineQueue = useCallback(async () => {
     if (!window.navigator.onLine || syncingRef.current) return;
@@ -433,11 +502,38 @@ export default function Home() {
   }
 
   async function login(credentials) {
+    if (!window.navigator.onLine) {
+      const username = normalizeUsername(credentials.username);
+      const passwordHash = await hashLoginPassword(username, credentials.password);
+      const cachedUsers = readStoredJson(LOGIN_CACHE_KEY, []);
+      const cachedUser = cachedUsers.find((user) => user.username === username && user.passwordHash === passwordHash);
+      if (!cachedUser) {
+        throw new Error("Offline login failed. This user must login online once on this device before offline login can work.");
+      }
+
+      const cachedData = normalizeShopData(readStoredJson(DATA_CACHE_KEY, emptyData));
+      setData(cachedData);
+      const offlineSession = {
+        role: cachedUser.role,
+        name: cachedUser.name,
+        username: cachedUser.username,
+        repId: cachedUser.repId || "",
+        offline: true,
+      };
+      window.localStorage.setItem("wonspareparts-session", JSON.stringify(offlineSession));
+      setSession(offlineSession);
+      setStatus("Offline login successful. Records will sync when internet returns.");
+      setActiveTab("dashboard");
+      setSidebarOpen(false);
+      return;
+    }
+
     try {
       const result = await loginUser(credentials);
       const sheetData = result.data || {};
       applyShopData(sheetData);
       const safeSession = result.session;
+      await cacheOfflineLogins(sheetData, safeSession, credentials);
       window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
       setSession(safeSession);
       setActiveTab("dashboard");
@@ -454,6 +550,16 @@ export default function Home() {
       const result = await updateSettings(payload);
       const nextData = result.data || (await fetchDatabase());
       applyShopData(nextData);
+      if (payload.manager_password) {
+        await cacheOfflineLogins(nextData, {
+          role: "manager",
+          name: payload.manager_name || "Manager",
+          username: payload.manager_username,
+          repId: "",
+        }, { password: payload.manager_password });
+      } else {
+        await cacheOfflineLogins(nextData, session);
+      }
       const nextUsers = buildLoginUsers([{ role: "manager", name: payload.manager_name, username: payload.manager_username, password: "" }], nextData.salesReps || []);
       window.localStorage.removeItem("wonspareparts-users");
       setUsers(nextUsers);
@@ -476,6 +582,7 @@ export default function Home() {
       reset?.();
       const nextData = result.data || (await fetchDatabase());
       applyShopData(nextData);
+      await cacheOfflineLogins(nextData, session);
       const uniqueUsers = buildLoginUsers(users, nextData.salesReps || []);
       window.localStorage.removeItem("wonspareparts-users");
       setUsers(uniqueUsers);

@@ -1,14 +1,30 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Cloud, CloudOff, UserRound } from "lucide-react";
 import { Field, useForm } from "./ui";
 
 export function LoginScreen({ onLogin }) {
   const [form, setForm] = useForm({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    setIsOnline(window.navigator.onLine);
+
+    function updateStatus() {
+      setIsOnline(window.navigator.onLine);
+    }
+
+    window.addEventListener("online", updateStatus);
+    window.addEventListener("offline", updateStatus);
+    return () => {
+      window.removeEventListener("online", updateStatus);
+      window.removeEventListener("offline", updateStatus);
+    };
+  }, []);
 
   async function submitLogin(event) {
     event.preventDefault();
@@ -32,6 +48,10 @@ export function LoginScreen({ onLogin }) {
         <div>
           <p className="eyebrow">Secure Access</p>
           <h1>WONSPAREPARTS Manager</h1>
+        </div>
+        <div className={isOnline ? "login-network online" : "login-network offline"}>
+          {isOnline ? <Cloud size={18} /> : <CloudOff size={18} />}
+          <span>{isOnline ? "Online login validation" : "Offline login validation"}</span>
         </div>
         <form className="login-form" onSubmit={submitLogin}>
           <Field label="Username" value={form.username} onChange={(username) => setForm({ username })} />
