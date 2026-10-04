@@ -382,6 +382,42 @@ button {
   white-space: nowrap;
 }
 
+.sync-status-button {
+  align-items: center;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-weight: 800;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.sync-status-button.attention {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.sync-status-button strong {
+  align-items: center;
+  background: var(--orange);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 21px;
+  justify-content: center;
+  min-width: 21px;
+  padding: 0 6px;
+}
+
 .eyebrow {
   color: var(--orange);
   font-size: 12px;
@@ -2319,6 +2355,15 @@ th {
 
   .notification-button {
     min-width: 48px;
+  }
+
+  .sync-status-button {
+    min-width: 48px;
+    padding: 0 8px;
+  }
+
+  .sync-status-button span {
+    display: none;
   }
 
   .tabs {

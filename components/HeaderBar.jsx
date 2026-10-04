@@ -1,8 +1,18 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Bell, Cloud, CloudOff, RefreshCw, Search } from "lucide-react";
 
-export function HeaderBar({ query, title = "WONSPAREPARTS Manager", lowStockCount = 0, outOfStockCount = 0, onLowStockClick, onQueryChange }) {
+export function HeaderBar({
+  query,
+  title = "WONSPAREPARTS Manager",
+  lowStockCount = 0,
+  outOfStockCount = 0,
+  isOnline = true,
+  pendingSyncCount = 0,
+  onLowStockClick,
+  onQueryChange,
+  onSyncNow,
+}) {
   return (
     <header className="topbar">
       <div>
@@ -10,6 +20,17 @@ export function HeaderBar({ query, title = "WONSPAREPARTS Manager", lowStockCoun
         <h1>{title}</h1>
       </div>
       <div className="topbar-actions">
+        <button
+          className={isOnline && pendingSyncCount === 0 ? "sync-status-button" : "sync-status-button attention"}
+          type="button"
+          onClick={onSyncNow}
+          title={isOnline ? `${pendingSyncCount} record${pendingSyncCount === 1 ? "" : "s"} pending sync` : "Offline mode"}
+        >
+          {isOnline ? <Cloud size={18} /> : <CloudOff size={18} />}
+          <span>{isOnline ? "Online" : "Offline"}</span>
+          {pendingSyncCount > 0 && <strong>{pendingSyncCount}</strong>}
+          {pendingSyncCount > 0 && isOnline && <RefreshCw size={14} />}
+        </button>
         {onLowStockClick && (
           <button
             className={lowStockCount ? "notification-button alert" : "notification-button"}

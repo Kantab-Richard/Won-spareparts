@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addBasketSale, addCategory, addExpense, addItem, addSalesRep, addStock, addSupplier, analyzeSupplyScan, checkConnection, fetchDatabase, loginUser, updateCategory, updateItem, updateSalesRep, updateSettings, updateSupplier } from "../lib/api";
 import { HeaderBar } from "../components/HeaderBar";
 import { Sidebar } from "../components/Sidebar";
@@ -22,6 +22,47 @@ import { LowStockPanel } from "../components/LowStockPanel";
 import { buildLoginUsers, buildReceipt, buildViewModel, getDateRange, normalizeName } from "../lib/business";
 import { defaultSettings, defaultUsers, emptyData, roleTabs, sidebarSections, tabs, today } from "../lib/constants";
 
+const DATA_CACHE_KEY = "wonspareparts-offline-data";
+const SYNC_QUEUE_KEY = "wonspareparts-sync-queue";
+
+function normalizeShopData(nextData = {}) {
+  return {
+    settings: { ...defaultSettings, ...(nextData.settings || {}) },
+    categories: nextData.categories || [],
+    items: nextData.items || [],
+    sales: nextData.sales || [],
+    stockIn: nextData.stockIn || [],
+    suppliers: nextData.suppliers || [],
+    movements: nextData.movements || [],
+    salesReps: nextData.salesReps || [],
+    expenses: nextData.expenses || [],
+  };
+}
+
+function readStoredJson(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStoredJson(key, value) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function buildOfflineReceiptNo() {
+  return `OFF-${Date.now().toString(36).toUpperCase()}`;
+}
+
+function canSaveOffline(error) {
+  if (typeof window !== "undefined" && !window.navigator.onLine) return true;
+  return /failed to fetch|network|offline|load failed/i.test(error?.message || "");
+}
+
 export default function Home() {
   const [session, setSession] = useState(null);
   const [users, setUsers] = useState(defaultUsers);
@@ -33,6 +74,10 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState({ mode: "today", start: today, end: today });
   const [saleCart, setSaleCart] = useState([]);
   const [lastReceipt, setLastReceipt] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const handlingHistoryRef = useRef(false);
+  const syncingRef = useRef(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("wonspareparts-session");
@@ -43,6 +88,21 @@ export default function Home() {
     if (storedUsers) {
       window.localStorage.removeItem("wonspareparts-users");
     }
+    setIsOnline(window.navigator.onLine);
+    setPendingSyncCount(readStoredJson(SYNC_QUEUE_KEY, []).length);
+  }, []);
+
+  useEffect(() => {
+    function updateNetworkStatus() {
+      setIsOnline(window.navigator.onLine);
+    }
+
+    window.addEventListener("online", updateNetworkStatus);
+    window.addEventListener("offline", updateNetworkStatus);
+    return () => {
+      window.removeEventListener("online", updateNetworkStatus);
+      window.removeEventListener("offline", updateNetworkStatus);
+    };
   }, []);
 
   const visibleTabs = useMemo(() => roleTabs[session?.role] || [], [session?.role]);
@@ -63,27 +123,104 @@ export default function Home() {
     { ...tabMap.history, description: "Track stock movement from purchases, sales, and edits." },
     { ...tabMap.lowStock, description: "Open only items at or below the low-stock limit." },
   ], [tabMap]);
+  const syncActions = useMemo(() => ({
+    addBasketSale,
+    addCategory,
+    addExpense,
+    addItem,
+    addSalesRep,
+    addStock,
+    addSupplier,
+    updateCategory,
+    updateItem,
+    updateSalesRep,
+    updateSettings,
+    updateSupplier,
+  }), []);
+
+  const applyShopData = useCallback((nextData, message) => {
+    const normalized = normalizeShopData(nextData);
+    setData(normalized);
+    saveStoredJson(DATA_CACHE_KEY, normalized);
+    if (message) setStatus(message);
+    return normalized;
+  }, []);
+
+  const saveQueue = useCallback((queue) => {
+    saveStoredJson(SYNC_QUEUE_KEY, queue);
+    setPendingSyncCount(queue.length);
+  }, []);
+
+  const queueOfflineAction = useCallback((actionName, payload, label) => {
+    const queue = readStoredJson(SYNC_QUEUE_KEY, []);
+    const nextQueue = [
+      ...queue,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        actionName,
+        payload,
+        label,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    saveQueue(nextQueue);
+    setStatus(`${label} saved offline. It will sync when internet returns.`);
+  }, [saveQueue]);
 
   const loadData = useCallback(async () => {
     setStatus("Refreshing records...");
     try {
       const nextData = await fetchDatabase();
-      setData({
-        settings: { ...defaultSettings, ...(nextData.settings || {}) },
-        categories: nextData.categories || [],
-        items: nextData.items || [],
-        sales: nextData.sales || [],
-        stockIn: nextData.stockIn || [],
-        suppliers: nextData.suppliers || [],
-        movements: nextData.movements || [],
-        salesReps: nextData.salesReps || [],
-        expenses: nextData.expenses || [],
-      });
-      setStatus("Records loaded");
+      applyShopData(nextData, "Records loaded");
     } catch (error) {
-      setStatus(error.message);
+      const cachedData = readStoredJson(DATA_CACHE_KEY, null);
+      if (cachedData) {
+        setData(normalizeShopData(cachedData));
+        setStatus("Offline mode: showing the last loaded records");
+      } else {
+        setStatus(error.message);
+      }
     }
-  }, []);
+  }, [applyShopData]);
+
+  const syncOfflineQueue = useCallback(async () => {
+    if (!window.navigator.onLine || syncingRef.current) return;
+    const queue = readStoredJson(SYNC_QUEUE_KEY, []);
+    if (!queue.length) {
+      setPendingSyncCount(0);
+      return;
+    }
+
+    syncingRef.current = true;
+    setStatus(`Syncing ${queue.length} offline record${queue.length === 1 ? "" : "s"}...`);
+    const remaining = [];
+
+    for (const entry of queue) {
+      const action = syncActions[entry.actionName];
+      if (!action) {
+        remaining.push(entry);
+        continue;
+      }
+
+      try {
+        await action(entry.payload);
+      } catch {
+        remaining.push(entry);
+        break;
+      }
+    }
+
+    saveQueue(remaining);
+    syncingRef.current = false;
+
+    if (remaining.length) {
+      setStatus(`${remaining.length} offline record${remaining.length === 1 ? "" : "s"} still pending`);
+      return;
+    }
+
+    await loadData();
+    setStatus("Offline records synced successfully");
+  }, [loadData, saveQueue, syncActions]);
 
   useEffect(() => {
     if (session) {
@@ -92,10 +229,51 @@ export default function Home() {
   }, [session, loadData]);
 
   useEffect(() => {
+    if (session && isOnline && pendingSyncCount > 0) {
+      syncOfflineQueue();
+    }
+  }, [isOnline, pendingSyncCount, session, syncOfflineQueue]);
+
+  useEffect(() => {
     if (session && !visibleTabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("dashboard");
     }
   }, [activeTab, session, visibleTabs]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const state = { wonspareparts: true, tab: activeTab, sidebarOpen };
+    if (!window.history.state?.wonspareparts) {
+      window.history.replaceState(state, "");
+      return;
+    }
+
+    if (handlingHistoryRef.current) {
+      handlingHistoryRef.current = false;
+      return;
+    }
+
+    if (window.history.state.tab !== activeTab || window.history.state.sidebarOpen !== sidebarOpen) {
+      window.history.pushState(state, "");
+    }
+  }, [activeTab, session, sidebarOpen]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    function handleAppBack(event) {
+      const state = event.state;
+      if (!state?.wonspareparts) return;
+
+      handlingHistoryRef.current = true;
+      setActiveTab(state.tab || "dashboard");
+      setSidebarOpen(Boolean(state.sidebarOpen));
+    }
+
+    window.addEventListener("popstate", handleAppBack);
+    return () => window.removeEventListener("popstate", handleAppBack);
+  }, [session]);
 
   const dateRange = useMemo(() => getDateRange(dateFilter), [dateFilter]);
   const view = useMemo(() => buildViewModel(data, dateRange), [data, dateRange]);
@@ -137,30 +315,62 @@ export default function Home() {
       setStatus("Sale cart is empty");
       return;
     }
+    const payload = {
+      Date: date,
+      Items: saleCart,
+      Sales_Rep_ID: session?.repId || "",
+      Sales_Rep_Name: session?.name || "",
+    };
     setStatus("Saving basket sale...");
     try {
-      const result = await addBasketSale({
-        Date: date,
-        Items: saleCart,
-        Sales_Rep_ID: session?.repId || "",
-        Sales_Rep_Name: session?.name || "",
-      });
+      const result = await addBasketSale(payload);
       setSaleCart([]);
       const nextData = result.data || (await fetchDatabase());
-      setData({
-        settings: { ...defaultSettings, ...(nextData.settings || {}) },
-        categories: nextData.categories || [],
-        items: nextData.items || [],
-        sales: nextData.sales || [],
-        stockIn: nextData.stockIn || [],
-        suppliers: nextData.suppliers || [],
-        movements: nextData.movements || [],
-        salesReps: nextData.salesReps || [],
-        expenses: nextData.expenses || [],
-      });
+      applyShopData(nextData);
       setLastReceipt(buildReceipt(result.receiptNo, nextData.sales || [], nextData.items || [], session?.name || "", appSettings));
       setStatus("Basket sale saved successfully");
     } catch (error) {
+      if (canSaveOffline(error)) {
+        const receiptNo = buildOfflineReceiptNo();
+        const itemMap = Object.fromEntries(data.items.map((item) => [item.Item_ID, item]));
+        const offlineSales = saleCart.map((entry, index) => {
+          const item = itemMap[entry.Item_ID] || {};
+          const qty = Number(entry.Qty_Sold || 0);
+          const sellingPrice = Number(item.Selling_Price || 0);
+          const costPrice = Number(item.Cost_Price || 0);
+          return {
+            Sale_ID: `${receiptNo}-${index + 1}`,
+            Receipt_No: receiptNo,
+            Date: date,
+            Item_ID: entry.Item_ID,
+            Qty_Sold: qty,
+            Unit_Selling_Price: sellingPrice,
+            Total_Revenue: sellingPrice * qty,
+            Total_COGS: costPrice * qty,
+            Sales_Rep_ID: session?.repId || "",
+            Sales_Rep_Name: session?.name || "",
+            Sync_Status: "Pending",
+          };
+        });
+        const nextData = normalizeShopData({
+          ...data,
+          sales: [...data.sales, ...offlineSales],
+          items: data.items.map((item) => {
+            const cartItem = saleCart.find((entry) => entry.Item_ID === item.Item_ID);
+            if (!cartItem) return item;
+            return {
+              ...item,
+              Current_Stock: Math.max(0, Number(item.Current_Stock || 0) - Number(cartItem.Qty_Sold || 0)),
+            };
+          }),
+        });
+        setData(nextData);
+        saveStoredJson(DATA_CACHE_KEY, nextData);
+        setSaleCart([]);
+        setLastReceipt(buildReceipt(receiptNo, offlineSales, data.items, session?.name || "", appSettings));
+        queueOfflineAction("addBasketSale", payload, "Basket sale");
+        return;
+      }
       setStatus(error.message);
     }
   }
@@ -205,7 +415,7 @@ export default function Home() {
     }
   }
 
-  async function submit(action, payload, reset) {
+  async function submit(actionName, action, payload, reset) {
     setStatus("Saving...");
     try {
       await action(payload);
@@ -213,6 +423,11 @@ export default function Home() {
       await loadData();
       setStatus("Saved successfully");
     } catch (error) {
+      if (canSaveOffline(error)) {
+        queueOfflineAction(actionName, payload, "Record");
+        reset?.();
+        return;
+      }
       setStatus(error.message);
     }
   }
@@ -221,17 +436,7 @@ export default function Home() {
     try {
       const result = await loginUser(credentials);
       const sheetData = result.data || {};
-      setData({
-        settings: { ...defaultSettings, ...(sheetData.settings || {}) },
-        categories: sheetData.categories || [],
-        items: sheetData.items || [],
-        sales: sheetData.sales || [],
-        stockIn: sheetData.stockIn || [],
-        suppliers: sheetData.suppliers || [],
-        movements: sheetData.movements || [],
-        salesReps: sheetData.salesReps || [],
-        expenses: sheetData.expenses || [],
-      });
+      applyShopData(sheetData);
       const safeSession = result.session;
       window.localStorage.setItem("wonspareparts-session", JSON.stringify(safeSession));
       setSession(safeSession);
@@ -248,49 +453,39 @@ export default function Home() {
     try {
       const result = await updateSettings(payload);
       const nextData = result.data || (await fetchDatabase());
-      setData({
-        settings: { ...defaultSettings, ...(nextData.settings || {}) },
-        categories: nextData.categories || [],
-        items: nextData.items || [],
-        sales: nextData.sales || [],
-        stockIn: nextData.stockIn || [],
-        suppliers: nextData.suppliers || [],
-        movements: nextData.movements || [],
-        salesReps: nextData.salesReps || [],
-        expenses: nextData.expenses || [],
-      });
+      applyShopData(nextData);
       const nextUsers = buildLoginUsers([{ role: "manager", name: payload.manager_name, username: payload.manager_username, password: "" }], nextData.salesReps || []);
       window.localStorage.removeItem("wonspareparts-users");
       setUsers(nextUsers);
       setStatus("Settings saved");
     } catch (error) {
+      if (canSaveOffline(error)) {
+        queueOfflineAction("updateSettings", payload, "Settings");
+        setStatus("Settings saved offline. They will sync when internet returns.");
+        return;
+      }
       setStatus(error.message);
       throw error;
     }
   }
 
-  async function submitSalesRep(action, payload, reset) {
+  async function submitSalesRep(actionName, action, payload, reset) {
     setStatus("Saving sales representative...");
     try {
       const result = await action(payload);
       reset?.();
       const nextData = result.data || (await fetchDatabase());
-      setData({
-        settings: { ...defaultSettings, ...(nextData.settings || {}) },
-        categories: nextData.categories || [],
-        items: nextData.items || [],
-        sales: nextData.sales || [],
-        stockIn: nextData.stockIn || [],
-        suppliers: nextData.suppliers || [],
-        movements: nextData.movements || [],
-        salesReps: nextData.salesReps || [],
-        expenses: nextData.expenses || [],
-      });
+      applyShopData(nextData);
       const uniqueUsers = buildLoginUsers(users, nextData.salesReps || []);
       window.localStorage.removeItem("wonspareparts-users");
       setUsers(uniqueUsers);
       setStatus("Sales representative saved");
     } catch (error) {
+      if (canSaveOffline(error)) {
+        queueOfflineAction(actionName, payload, "Sales representative");
+        reset?.();
+        return;
+      }
       setStatus(error.message);
       throw error;
     }
@@ -332,8 +527,11 @@ export default function Home() {
           query={query}
           lowStockCount={session.role === "manager" ? lowStockItems.length : 0}
           outOfStockCount={session.role === "manager" ? outOfStockCount : 0}
+          isOnline={isOnline}
+          pendingSyncCount={pendingSyncCount}
           onLowStockClick={session.role === "manager" ? () => setActiveTab("lowStock") : undefined}
           onQueryChange={setQuery}
+          onSyncNow={syncOfflineQueue}
         />
 
         {activeTab === "dashboard" && (
@@ -388,7 +586,7 @@ export default function Home() {
             onAddToCart={addToCart}
           />
         )}
-        {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit(addStock, payload, reset)} />}
+        {activeTab === "stock" && <StockForm items={activeItems} suppliers={data.suppliers} onSubmit={(payload, reset) => submit("addStock", addStock, payload, reset)} />}
         {activeTab === "aiSupply" && session.role === "manager" && (
           <AiSupplyScanPanel
             items={activeItems}
@@ -401,8 +599,8 @@ export default function Home() {
         {activeTab === "suppliers" && session.role === "manager" && (
           <SuppliersPanel
             suppliers={data.suppliers}
-            onSubmit={(payload, reset) => submit(addSupplier, payload, reset)}
-            onUpdate={(payload) => submit(updateSupplier, payload)}
+            onSubmit={(payload, reset) => submit("addSupplier", addSupplier, payload, reset)}
+            onUpdate={(payload) => submit("updateSupplier", updateSupplier, payload)}
           />
         )}
         {activeTab === "history" && session.role === "manager" && (
@@ -417,19 +615,19 @@ export default function Home() {
             categories={data.categories}
             role={session.role}
             lowStockLimit={lowStockLimit}
-            onSubmit={(payload, reset) => submit(addItem, payload, reset)}
-            onUpdate={(payload) => submit(updateItem, payload)}
+            onSubmit={(payload, reset) => submit("addItem", addItem, payload, reset)}
+            onUpdate={(payload) => submit("updateItem", updateItem, payload)}
             onAddToCart={addToCart}
           />
         )}
         {activeTab === "expenses" && (
-          <ExpensesPanel expenses={data.expenses} onSubmit={(payload, reset) => submit(addExpense, payload, reset)} />
+          <ExpensesPanel expenses={data.expenses} onSubmit={(payload, reset) => submit("addExpense", addExpense, payload, reset)} />
         )}
         {activeTab === "categories" && (
           <CategoriesPanel
             categories={data.categories}
-            onSubmit={(payload, reset) => submit(addCategory, payload, reset)}
-            onUpdate={(payload) => submit(updateCategory, payload)}
+            onSubmit={(payload, reset) => submit("addCategory", addCategory, payload, reset)}
+            onUpdate={(payload) => submit("updateCategory", updateCategory, payload)}
           />
         )}
         {activeTab === "settings" && session.role === "manager" && (
@@ -438,8 +636,8 @@ export default function Home() {
             settings={appSettings}
             salesReps={data.salesReps}
             onSaveSettings={saveAppSettings}
-            onAddSalesRep={(payload, reset) => submitSalesRep(addSalesRep, payload, reset)}
-            onUpdateSalesRep={(payload) => submitSalesRep(updateSalesRep, payload)}
+            onAddSalesRep={(payload, reset) => submitSalesRep("addSalesRep", addSalesRep, payload, reset)}
+            onUpdateSalesRep={(payload) => submitSalesRep("updateSalesRep", updateSalesRep, payload)}
             onCheckConnection={checkConnection}
           />
         )}
