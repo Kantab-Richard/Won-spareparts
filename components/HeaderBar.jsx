@@ -1,9 +1,13 @@
 "use client";
 
-import { Bell, Cloud, CloudOff, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, Cloud, CloudOff, RefreshCw, Search } from "lucide-react";
 
 export function HeaderBar({
   query,
+  canGoBack = false,
+  canGoForward = false,
+  onGoBack,
+  onGoForward,
   title = "WONSPAREPARTS Manager",
   lowStockCount = 0,
   outOfStockCount = 0,
@@ -15,9 +19,19 @@ export function HeaderBar({
 }) {
   return (
     <header className="topbar">
-      <div>
-        <p className="eyebrow">Sales & Inventory</p>
-        <h1>{title}</h1>
+      <div className="topbar-title">
+        <div className="page-navigation" role="group" aria-label="Page navigation">
+          <button type="button" className="icon-button" aria-label="Go back" title="Back" disabled={!canGoBack} onClick={onGoBack}>
+            <ArrowLeft size={19} />
+          </button>
+          <button type="button" className="icon-button" aria-label="Go forward" title="Forward" disabled={!canGoForward} onClick={onGoForward}>
+            <ArrowRight size={19} />
+          </button>
+        </div>
+        <div>
+          <p className="eyebrow">Sales & Inventory</p>
+          <h1>{title}</h1>
+        </div>
       </div>
       <div className="topbar-actions">
         <button

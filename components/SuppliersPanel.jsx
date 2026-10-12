@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { useState } from "react";
 import { EmptyState, Field, FormPanel, StatusBadge, StatusSelect, useForm } from "./ui";
 
 export function SuppliersPanel({ suppliers, onSubmit, onUpdate }) {

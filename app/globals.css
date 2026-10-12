@@ -360,6 +360,40 @@ button {
   z-index: 20;
 }
 
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar-title > div:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.page-navigation .icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+}
+
+.page-navigation .icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.page-navigation .icon-button:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
 .topbar-actions {
   align-items: center;
   display: flex;
@@ -2388,6 +2422,12 @@ th {
   .topbar-actions {
     align-items: stretch;
     max-width: none;
+  }
+
+  .topbar-title {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .notification-button {

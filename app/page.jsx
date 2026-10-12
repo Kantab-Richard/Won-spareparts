@@ -114,6 +114,8 @@ export default function Home() {
   const [isOnline, setIsOnline] = useState(true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const handlingHistoryRef = useRef(false);
+  const navigationRef = useRef({ session: null, id: "", index: 0, lastIndex: 0 });
+  const [navigation, setNavigation] = useState({ canBack: false, canForward: false });
   const syncingRef = useRef(false);
 
   useEffect(() => {
@@ -312,9 +314,11 @@ export default function Home() {
   useEffect(() => {
     if (!session) return;
 
-    const state = { wonspareparts: true, tab: activeTab, sidebarOpen };
-    if (!window.history.state?.wonspareparts) {
-      window.history.replaceState(state, "");
+    const trail = navigationRef.current;
+    if (trail.session !== session) {
+      Object.assign(trail, { session, id: `${Date.now()}-${Math.random()}`, index: 0, lastIndex: 0 });
+      window.history.replaceState({ wonspareparts: true, tab: activeTab, navigationId: trail.id, index: 0 }, "");
+      setNavigation({ canBack: false, canForward: false });
       return;
     }
 
@@ -323,21 +327,27 @@ export default function Home() {
       return;
     }
 
-    if (window.history.state.tab !== activeTab || window.history.state.sidebarOpen !== sidebarOpen) {
-      window.history.pushState(state, "");
+    if (window.history.state?.tab !== activeTab) {
+      trail.index += 1;
+      trail.lastIndex = trail.index;
+      window.history.pushState({ wonspareparts: true, tab: activeTab, navigationId: trail.id, index: trail.index }, "");
+      setNavigation({ canBack: true, canForward: false });
     }
-  }, [activeTab, session, sidebarOpen]);
+  }, [activeTab, session]);
 
   useEffect(() => {
     if (!session) return;
 
     function handleAppBack(event) {
       const state = event.state;
-      if (!state?.wonspareparts) return;
+      const trail = navigationRef.current;
+      if (!state?.wonspareparts || state.navigationId !== trail.id) return;
 
       handlingHistoryRef.current = true;
+      trail.index = state.index;
+      setNavigation({ canBack: trail.index > 0, canForward: trail.index < trail.lastIndex });
       setActiveTab(state.tab || "dashboard");
-      setSidebarOpen(Boolean(state.sidebarOpen));
+      setSidebarOpen(false);
     }
 
     window.addEventListener("popstate", handleAppBack);
@@ -632,6 +642,10 @@ export default function Home() {
       <section className="workspace">
         <HeaderBar
           query={query}
+          canGoBack={navigation.canBack}
+          canGoForward={navigation.canForward}
+          onGoBack={() => { if (navigation.canBack) window.history.back(); }}
+          onGoForward={() => { if (navigation.canForward) window.history.forward(); }}
           lowStockCount={session.role === "manager" ? lowStockItems.length : 0}
           outOfStockCount={session.role === "manager" ? outOfStockCount : 0}
           isOnline={isOnline}
