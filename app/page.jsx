@@ -750,6 +750,14 @@ export default function Home() {
         )}
       </section>
       <FloatingCartButton
+        shortcut="items"
+        active={activeTab === "items"}
+        onOpen={() => {
+          setActiveTab("items");
+          setSidebarOpen(false);
+        }}
+      />
+      <FloatingCartButton
         active={activeTab === "sales"}
         count={cartCount}
         onOpen={() => {

@@ -1,7 +1,7 @@
 "use client";
 
-import { Pencil } from "lucide-react";
-import { EmptyState, Field, FormPanel, StatusBadge, StatusSelect, useForm } from "./ui";
+import { useState } from "react";
+import { EmptyState, Field, FormPanel, StatusBadge, useForm } from "./ui";
 
 export function CategoriesPanel({ categories, onSubmit, onUpdate }) {
   const [form, setForm] = useForm({ Category_Name: "", Status: "Active" });
